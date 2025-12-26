@@ -1,0 +1,141 @@
+// SPDX-License-Identifier: MIT OR AGPL-3.0-or-later
+// SPDX-FileCopyrightText: 2024-2025 hyperpolymath
+
+= Anvomidav Roadmap
+
+This document outlines the development phases for Anvomidav, the first programming language for figure skating choreographers.
+
+== Current Status
+
+[CAUTION]
+====
+**Phase 0 — Project Specification**
+
+The repository currently contains governance and infrastructure only. Implementation has not begun.
+====
+
+'''
+
+== Phase 1: Foundation
+
+=== 1.1 Domain Research
+* [ ] Document figure skating element taxonomy (jumps, spins, steps, lifts)
+* [ ] Map ISU technical panel guidelines to formal rules
+* [ ] Interview choreographers to understand workflow needs
+* [ ] Survey existing notation systems (Benesh, Labanotation adaptations)
+
+=== 1.2 Language Design
+* [ ] Define core syntax for element notation
+* [ ] Design timing/music synchronization primitives
+* [ ] Specify spatial positioning system (rink coordinates)
+* [ ] Create grammar specification (EBNF or similar)
+* [ ] Write language reference document
+
+=== 1.3 Tooling Bootstrap
+* [ ] Set up build system (Nix flake, Guix manifest)
+* [ ] Configure CI/CD pipelines
+* [ ] Establish test framework
+
+'''
+
+== Phase 2: Core Implementation
+
+=== 2.1 Parser & AST
+* [ ] Implement lexer
+* [ ] Implement parser
+* [ ] Define AST representation
+* [ ] Add source location tracking for error messages
+
+=== 2.2 Semantic Analysis
+* [ ] Type system for skating elements
+* [ ] Temporal constraint checking
+* [ ] Spatial collision detection (basic)
+* [ ] ISU rule validation
+
+=== 2.3 Compiler/Interpreter
+* [ ] Choose target(s): native / JS / WASM
+* [ ] Implement code generation or interpreter
+* [ ] Create runtime library
+
+'''
+
+== Phase 3: Developer Experience
+
+=== 3.1 Language Server Protocol (LSP)
+* [ ] Syntax highlighting definitions
+* [ ] Autocomplete for elements and transitions
+* [ ] Hover documentation
+* [ ] Go-to-definition
+* [ ] Diagnostics integration
+
+=== 3.2 Editor Plugins
+* [ ] VS Code / VSCodium extension
+* [ ] Helix configuration
+* [ ] Neovim plugin
+* [ ] Zed extension
+
+=== 3.3 Documentation
+* [ ] Language tutorial
+* [ ] API reference
+* [ ] Example programs (competition programs, practice sequences)
+* [ ] Video walkthroughs
+
+'''
+
+== Phase 4: Visualization
+
+=== 4.1 2D Rink Diagrams
+* [ ] Static SVG export
+* [ ] Animated trace playback
+* [ ] Pattern overlay
+
+=== 4.2 Timing Charts
+* [ ] Music waveform alignment
+* [ ] Element duration visualization
+* [ ] Program component breakdown
+
+=== 4.3 3D Preview (Stretch Goal)
+* [ ] Skeletal animation system
+* [ ] Real-time playback
+* [ ] VR/AR exploration
+
+'''
+
+== Phase 5: Ecosystem
+
+=== 5.1 Package Manager
+* [ ] Choreographic pattern library format
+* [ ] Version resolution
+* [ ] Registry (decentralized preferred)
+
+=== 5.2 Collaboration Tools
+* [ ] Diff/merge for choreographic files
+* [ ] Comment/annotation system
+* [ ] Export to PDF/print formats
+
+=== 5.3 Mobile Applications
+* [ ] Rinkside viewer app (Tauri or Dioxus)
+* [ ] Offline-first architecture
+* [ ] Music sync for practice
+
+'''
+
+== Future Possibilities
+
+* Integration with motion capture systems
+* AI-assisted choreography suggestions
+* Competition judging simulation
+* Multi-skater/pairs/ice dance support
+* Synchro skating team coordination
+
+'''
+
+== How to Contribute
+
+This roadmap is a living document. To propose changes:
+
+1. Open a GitHub Discussion for major direction changes
+2. Submit a PR for specific task additions
+3. Use issues to claim tasks you want to work on
+
+See link:CONTRIBUTING.md[CONTRIBUTING.md] for workflow details.
