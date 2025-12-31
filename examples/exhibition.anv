@@ -1,0 +1,69 @@
+// Exhibition/Gala Program
+//
+// Exhibition programs (also called gala performances) are
+// artistic showcases without competitive scoring.
+// Skaters have creative freedom to express themselves.
+//
+// No ISU requirements apply - pure artistic expression.
+// Common at gala events after competitions.
+
+program gala_exhibition {
+    segment ex: exhibition {
+        // Opening Statement
+        // Dramatic entry to capture audience attention
+        sequence opening {
+            choreographic dramatic_entry
+        }
+
+        // Signature Triple Axel
+        // Showcase of technical ability
+        sequence signature_jump {
+            jump triple axel
+        }
+
+        // Artistic Spin Sequence
+        // Creative spin positions and transitions
+        sequence art_spin {
+            spin layback L4
+        }
+
+        // Storytelling Section
+        // Extended choreographic passage
+        sequence story {
+            choreographic movement_phrase
+            choreographic spiral
+            choreographic ina_bauer
+        }
+
+        // Quad Showcase
+        // Audience favorite - maximum impact
+        sequence quad_moment {
+            jump quad toe_loop
+        }
+
+        // Footwork Expression
+        // Musical interpretation through skating
+        sequence expression {
+            step circular L3
+        }
+
+        // Combination Highlight
+        // Technical difficulty for impact
+        sequence combo {
+            jump triple lutz
+            jump triple toe_loop
+        }
+
+        // Final Spin
+        // Building to crescendo
+        sequence finale_spin {
+            spin camel sit upright L4
+        }
+
+        // Closing Pose
+        // Final artistic statement
+        sequence ending {
+            choreographic final_pose
+        }
+    }
+}

@@ -90,10 +90,14 @@ name = "anv-cli"
 version = "0.1.0"
 dependencies = [
  "anv-core",
+ "anv-ir",
+ "anv-semantics",
  "anv-syntax",
  "anv-types",
+ "anv-viz",
  "clap",
  "miette",
+ "serde_json",
  "thiserror",
 ]
 

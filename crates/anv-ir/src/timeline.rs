@@ -292,18 +292,13 @@ impl EventKind {
 }
 
 /// Step sequence pattern.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub enum StepPattern {
+    #[default]
     Straight,
     Circular,
     Serpentine,
     Diagonal,
-}
-
-impl Default for StepPattern {
-    fn default() -> Self {
-        Self::Straight
-    }
 }
 
 /// Choreographic element kind.

@@ -1,0 +1,60 @@
+// Men's Short Program - Championship Level
+//
+// Based on ISU Technical Requirements for Senior Men's Short Program.
+// Duration: 2:40 (+/- 10 seconds)
+//
+// Required Elements:
+// 1. Double or triple Axel
+// 2. Triple or quadruple jump preceded by connecting steps/movements
+// 3. Jump combination (triple-triple or quad-triple)
+// 4. Flying spin or spin with flying entry
+// 5. Camel or sit spin with only one change of foot
+// 6. Spin combination with only one change of foot
+// 7. Step sequence utilizing the full ice surface
+
+program mens_short_2025 {
+    segment sp: short {
+        // Opening - Triple Axel
+        // The signature opening jump, demonstrating power and confidence
+        sequence opening {
+            jump triple axel
+        }
+
+        // Quad-Triple Combination
+        // Maximum difficulty combination for base value
+        sequence combination {
+            jump quad lutz
+            jump triple toe_loop
+        }
+
+        // Flying Camel Spin
+        // Flying entry with camel position, demonstrating flexibility
+        sequence flying_spin {
+            spin camel L4
+        }
+
+        // Step Sequence
+        // Full ice coverage with varied turns and edges
+        sequence footwork {
+            step circular L4
+        }
+
+        // Solo Quad with Steps
+        // Quad preceded by difficult entry steps
+        sequence solo_jump {
+            jump quad flip
+        }
+
+        // Change Foot Sit Spin
+        // Sit spin with change of foot, varied positions
+        sequence sit_spin {
+            spin sit L4
+        }
+
+        // Combination Spin
+        // Multiple positions with change of foot
+        sequence combo_spin {
+            spin camel sit upright L4
+        }
+    }
+}

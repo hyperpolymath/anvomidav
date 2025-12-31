@@ -1,0 +1,77 @@
+// Ladies' Free Skating Program - Championship Level
+//
+// Based on ISU Technical Requirements for Senior Ladies Free Skating.
+// Duration: 4:00 (+/- 10 seconds)
+//
+// Well-Balanced Program Requirements:
+// - Maximum of 7 jump elements (one must be Axel type)
+// - Maximum of 3 spins (one must be combination, one flying/flying entry)
+// - Maximum of 1 step sequence
+// - Maximum of 1 choreographic sequence
+
+program ladies_free_2025 {
+    segment fs: free {
+        // Opening Triple Axel
+        // Rare and valuable - few ladies attempt this
+        sequence opening_axel {
+            jump triple axel
+        }
+
+        // Quad-Triple Combination
+        // Elite level combination for maximum base value
+        sequence quad_combo {
+            jump quad toe_loop
+            jump triple toe_loop
+        }
+
+        // Flying Camel Spin
+        // Flying entry demonstrating athletic ability
+        sequence flying_spin {
+            spin camel L4
+        }
+
+        // Triple Lutz - Triple Loop Combination
+        // Difficult edge jump combination
+        sequence lutz_combo {
+            jump triple lutz
+            jump triple loop
+        }
+
+        // Choreographic Sequence
+        // Artistic expression connecting program elements
+        sequence choreo {
+            choreographic spiral
+        }
+
+        // Step Sequence
+        // Full ice utilization with maximum level features
+        sequence footwork {
+            step serpentine L4
+        }
+
+        // Solo Triple Flip
+        // Clean edge jump in second half for bonus
+        sequence solo_flip {
+            jump triple flip
+        }
+
+        // Layback Spin
+        // Signature ladies' spin position
+        sequence layback {
+            spin layback L4
+        }
+
+        // Triple Salchow - Double Toe Loop
+        // Smaller combination for variety
+        sequence salchow_combo {
+            jump triple salchow
+            jump double toe_loop
+        }
+
+        // Combination Spin
+        // All three basic positions with change of foot
+        sequence combo_spin {
+            spin camel sit upright L4
+        }
+    }
+}

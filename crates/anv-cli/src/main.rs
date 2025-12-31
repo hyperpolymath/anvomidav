@@ -10,8 +10,11 @@
 //! - Generating visualizations
 
 use anv_core::source::FileId;
+use anv_ir::lower;
+use anv_semantics::{validate_program, Discipline};
 use anv_syntax::parse;
 use anv_types::check;
+use anv_viz::{RinkRenderer, SvgOptions, TimelineRenderer};
 use clap::{Parser, Subcommand};
 use miette::{Diagnostic, NamedSource, Report, SourceSpan};
 use std::fs;
@@ -76,6 +79,60 @@ enum Commands {
         /// Project template (singles, pairs, ice-dance)
         #[arg(short, long, default_value = "singles")]
         template: String,
+    },
+
+    /// Generate SVG visualization of a program
+    Viz {
+        /// Source file to visualize
+        file: PathBuf,
+
+        /// Output file (default: <input>.svg)
+        #[arg(short, long)]
+        output: Option<PathBuf>,
+
+        /// Visualization type (rink, timeline, both)
+        #[arg(short = 't', long, default_value = "rink")]
+        viz_type: String,
+
+        /// SVG width in pixels
+        #[arg(long, default_value = "800")]
+        width: f64,
+
+        /// SVG height in pixels
+        #[arg(long, default_value = "400")]
+        height: f64,
+    },
+
+    /// Export program to different formats
+    Export {
+        /// Source file to export
+        file: PathBuf,
+
+        /// Output file (default: <input>.<format>)
+        #[arg(short, long)]
+        output: Option<PathBuf>,
+
+        /// Export format (json, ir)
+        #[arg(short, long, default_value = "json")]
+        format: String,
+
+        /// Pretty-print output
+        #[arg(long)]
+        pretty: bool,
+    },
+
+    /// Display information about a program
+    Info {
+        /// Source file to analyze
+        file: PathBuf,
+
+        /// Show ISU rule validation
+        #[arg(long)]
+        validate: bool,
+
+        /// Discipline for validation (singles, pairs, ice-dance)
+        #[arg(short, long, default_value = "singles")]
+        discipline: String,
     },
 }
 
@@ -373,6 +430,302 @@ program {} {{
 
             eprintln!("Created new {} project in '{}'", template, name);
             eprintln!("  Main file: {}/main.anv", name);
+
+            Ok(())
+        }
+
+        Commands::Viz {
+            file,
+            output,
+            viz_type,
+            width,
+            height,
+        } => {
+            let source = fs::read_to_string(&file).map_err(|e| CliError::ReadError {
+                path: file.display().to_string(),
+                source: e,
+            })?;
+
+            // Parse and type check
+            let program = parse(&source, FileId(0)).map_err(|errors| {
+                let err = &errors[0];
+                let span: SourceSpan = (err.span.start, err.span.end - err.span.start).into();
+                CliError::ParseError {
+                    src: NamedSource::new(file.display().to_string(), source.clone()),
+                    span,
+                    help: err.message.clone(),
+                }
+            })?;
+
+            check(&program, FileId(0)).map_err(|diagnostics| {
+                miette::miette!(
+                    "Type errors: {}",
+                    diagnostics
+                        .iter()
+                        .map(|d| d.message.clone())
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                )
+            })?;
+
+            // Lower to IR
+            let timeline = lower(&program);
+
+            // Generate SVG based on type
+            let base_output = output.unwrap_or_else(|| {
+                let mut p = file.clone();
+                p.set_extension("svg");
+                p
+            });
+
+            match viz_type.as_str() {
+                "rink" => {
+                    let options = SvgOptions {
+                        width,
+                        height,
+                        ..Default::default()
+                    };
+                    let svg = RinkRenderer::new(options).render(&timeline);
+                    fs::write(&base_output, &svg).map_err(|e| CliError::ReadError {
+                        path: base_output.display().to_string(),
+                        source: e,
+                    })?;
+                    eprintln!("Generated rink diagram: {}", base_output.display());
+                }
+                "timeline" => {
+                    let renderer = TimelineRenderer::default_renderer();
+                    let svg = renderer.render(&timeline);
+                    fs::write(&base_output, &svg).map_err(|e| CliError::ReadError {
+                        path: base_output.display().to_string(),
+                        source: e,
+                    })?;
+                    eprintln!("Generated timeline chart: {}", base_output.display());
+                }
+                "both" => {
+                    // Rink diagram
+                    let rink_options = SvgOptions {
+                        width,
+                        height,
+                        ..Default::default()
+                    };
+                    let rink_svg = RinkRenderer::new(rink_options).render(&timeline);
+                    let mut rink_path = base_output.clone();
+                    rink_path.set_extension("rink.svg");
+                    fs::write(&rink_path, &rink_svg).map_err(|e| CliError::ReadError {
+                        path: rink_path.display().to_string(),
+                        source: e,
+                    })?;
+                    eprintln!("Generated rink diagram: {}", rink_path.display());
+
+                    // Timeline chart
+                    let timeline_svg = TimelineRenderer::default_renderer().render(&timeline);
+                    let mut timeline_path = base_output.clone();
+                    timeline_path.set_extension("timeline.svg");
+                    fs::write(&timeline_path, &timeline_svg).map_err(|e| CliError::ReadError {
+                        path: timeline_path.display().to_string(),
+                        source: e,
+                    })?;
+                    eprintln!("Generated timeline chart: {}", timeline_path.display());
+                }
+                _ => {
+                    return Err(miette::miette!(
+                        "Unknown viz type '{}'. Use: rink, timeline, or both",
+                        viz_type
+                    ));
+                }
+            }
+
+            Ok(())
+        }
+
+        Commands::Export {
+            file,
+            output,
+            format,
+            pretty,
+        } => {
+            let source = fs::read_to_string(&file).map_err(|e| CliError::ReadError {
+                path: file.display().to_string(),
+                source: e,
+            })?;
+
+            // Parse and type check
+            let program = parse(&source, FileId(0)).map_err(|errors| {
+                let err = &errors[0];
+                let span: SourceSpan = (err.span.start, err.span.end - err.span.start).into();
+                CliError::ParseError {
+                    src: NamedSource::new(file.display().to_string(), source.clone()),
+                    span,
+                    help: err.message.clone(),
+                }
+            })?;
+
+            check(&program, FileId(0)).map_err(|diagnostics| {
+                miette::miette!(
+                    "Type errors: {}",
+                    diagnostics
+                        .iter()
+                        .map(|d| d.message.clone())
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                )
+            })?;
+
+            // Lower to IR
+            let timeline = lower(&program);
+
+            let ext = match format.as_str() {
+                "json" => "json",
+                "ir" => "ir.json",
+                _ => {
+                    return Err(miette::miette!(
+                        "Unknown export format '{}'. Use: json or ir",
+                        format
+                    ));
+                }
+            };
+
+            let output_path = output.unwrap_or_else(|| {
+                let mut p = file.clone();
+                p.set_extension(ext);
+                p
+            });
+
+            let json = if pretty {
+                serde_json::to_string_pretty(&timeline)
+            } else {
+                serde_json::to_string(&timeline)
+            }
+            .map_err(|e| miette::miette!("JSON serialization failed: {}", e))?;
+
+            fs::write(&output_path, &json).map_err(|e| CliError::ReadError {
+                path: output_path.display().to_string(),
+                source: e,
+            })?;
+
+            eprintln!("Exported to: {}", output_path.display());
+            Ok(())
+        }
+
+        Commands::Info { file, validate, discipline } => {
+            let source = fs::read_to_string(&file).map_err(|e| CliError::ReadError {
+                path: file.display().to_string(),
+                source: e,
+            })?;
+
+            // Parse
+            let program = parse(&source, FileId(0)).map_err(|errors| {
+                let err = &errors[0];
+                let span: SourceSpan = (err.span.start, err.span.end - err.span.start).into();
+                CliError::ParseError {
+                    src: NamedSource::new(file.display().to_string(), source.clone()),
+                    span,
+                    help: err.message.clone(),
+                }
+            })?;
+
+            // Type check
+            let type_ok = check(&program, FileId(0)).is_ok();
+
+            // Lower to IR
+            let timeline = lower(&program);
+
+            println!("Program: {}", program.name.node);
+            println!("Segments: {}", program.segments.len());
+            println!("Type Check: {}", if type_ok { "PASS" } else { "FAIL" });
+            println!();
+
+            // Count elements by type
+            let mut jumps = 0;
+            let mut spins = 0;
+            let mut steps = 0;
+            let mut choreo = 0;
+            let mut pairs_elements = 0;
+
+            for event in &timeline.events {
+                use anv_ir::timeline::EventKind;
+                match &event.kind {
+                    EventKind::Jump { .. } | EventKind::JumpCombination { .. } => jumps += 1,
+                    EventKind::Spin { .. } => spins += 1,
+                    EventKind::StepSequence { .. } => steps += 1,
+                    EventKind::ChoreographicSequence | EventKind::Choreographic { .. } => choreo += 1,
+                    EventKind::Lift { .. }
+                    | EventKind::Throw { .. }
+                    | EventKind::Twist { .. }
+                    | EventKind::DeathSpiral { .. } => pairs_elements += 1,
+                    _ => {}
+                }
+            }
+
+            println!("Elements:");
+            println!("  Jumps: {}", jumps);
+            println!("  Spins: {}", spins);
+            println!("  Steps: {}", steps);
+            println!("  Choreographic: {}", choreo);
+            if pairs_elements > 0 {
+                println!("  Pairs Elements: {}", pairs_elements);
+            }
+            println!("  Total: {}", timeline.events.len());
+            println!();
+
+            if validate {
+                let disc = match discipline.as_str() {
+                    "singles" | "men" => Discipline::MenSingles,
+                    "ladies" | "women" => Discipline::LadiesSingles,
+                    "pairs" => Discipline::Pairs,
+                    "ice-dance" | "dance" => Discipline::IceDance,
+                    _ => {
+                        return Err(miette::miette!(
+                            "Unknown discipline '{}'. Use: singles, ladies, pairs, or ice-dance",
+                            discipline
+                        ));
+                    }
+                };
+
+                println!("ISU Validation ({:?})", disc);
+                println!("-------------------");
+
+                let result = validate_program(&program, disc);
+                if result.errors.is_empty() && result.warnings.is_empty() {
+                    println!("  All rules passed!");
+                } else {
+                    for error in &result.errors {
+                        println!("  ERROR: {}", error);
+                    }
+                    for warning in &result.warnings {
+                        println!("  WARNING: {}", warning);
+                    }
+                }
+                println!();
+
+                // Show segment rules
+                for segment in &program.segments {
+                    let rules = disc.segment_rules(segment.kind);
+                    println!("Segment '{}' ({}) limits:", segment.name.node, segment.kind);
+                    if let Some(max) = rules.max_jumps {
+                        println!("  Max jumps: {}", max);
+                    }
+                    if let Some(max) = rules.max_spins {
+                        println!("  Max spins: {}", max);
+                    }
+                    if let Some(count) = rules.step_sequences {
+                        println!("  Step sequences: {}", count);
+                    }
+                    if let Some(count) = rules.required_lifts {
+                        println!("  Lifts: {}", count);
+                    }
+                    if let Some(count) = rules.required_throws {
+                        println!("  Throws: {}", count);
+                    }
+                    if let Some(count) = rules.required_twists {
+                        println!("  Twists: {}", count);
+                    }
+                    if let Some(count) = rules.required_death_spirals {
+                        println!("  Death spirals: {}", count);
+                    }
+                    println!();
+                }
+            }
 
             Ok(())
         }
