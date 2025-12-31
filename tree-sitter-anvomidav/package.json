@@ -1,0 +1,59 @@
+{
+  "name": "tree-sitter-anvomidav",
+  "version": "0.1.0",
+  "description": "Tree-sitter grammar for Anvomidav figure skating DSL",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/hyperpolymath/anvomidav.git",
+    "directory": "tree-sitter-anvomidav"
+  },
+  "license": "MIT OR AGPL-3.0-or-later",
+  "main": "bindings/node",
+  "types": "bindings/node",
+  "keywords": [
+    "tree-sitter",
+    "parser",
+    "figure-skating",
+    "dsl",
+    "anvomidav"
+  ],
+  "files": [
+    "grammar.js",
+    "binding.gyp",
+    "prebuilds/**",
+    "bindings/node/*",
+    "queries/*",
+    "src/**"
+  ],
+  "dependencies": {
+    "node-addon-api": "^7.1.0",
+    "node-gyp-build": "^4.8.0"
+  },
+  "peerDependencies": {
+    "tree-sitter": "^0.21.0"
+  },
+  "peerDependenciesMeta": {
+    "tree-sitter": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "tree-sitter-cli": "^0.22.0"
+  },
+  "scripts": {
+    "generate": "tree-sitter generate",
+    "build": "tree-sitter generate && node-gyp rebuild",
+    "test": "tree-sitter test",
+    "parse": "tree-sitter parse"
+  },
+  "tree-sitter": [
+    {
+      "scope": "source.anv",
+      "file-types": [
+        "anv"
+      ],
+      "highlights": "queries/highlights.scm",
+      "injection-regex": "anvomidav"
+    }
+  ]
+}

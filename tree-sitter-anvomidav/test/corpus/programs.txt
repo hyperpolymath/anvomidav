@@ -1,0 +1,78 @@
+================================================================================
+Empty program
+================================================================================
+
+program test {}
+
+--------------------------------------------------------------------------------
+
+(source_file
+  (program_definition
+    name: (identifier)))
+
+================================================================================
+Program with doc comments
+================================================================================
+
+/// This is a program
+/// With documentation
+program documented {}
+
+--------------------------------------------------------------------------------
+
+(source_file
+  (doc_comment)
+  (doc_comment)
+  (program_definition
+    name: (identifier)))
+
+================================================================================
+Program with segment
+================================================================================
+
+program my_program {
+  segment sp: short {
+  }
+}
+
+--------------------------------------------------------------------------------
+
+(source_file
+  (program_definition
+    name: (identifier)
+    (segment
+      name: (identifier)
+      kind: (segment_kind))))
+
+================================================================================
+All segment kinds
+================================================================================
+
+program kinds {
+  segment a: short {}
+  segment b: free {}
+  segment c: pattern {}
+  segment d: rhythm {}
+  segment e: exhibition {}
+}
+
+--------------------------------------------------------------------------------
+
+(source_file
+  (program_definition
+    name: (identifier)
+    (segment
+      name: (identifier)
+      kind: (segment_kind))
+    (segment
+      name: (identifier)
+      kind: (segment_kind))
+    (segment
+      name: (identifier)
+      kind: (segment_kind))
+    (segment
+      name: (identifier)
+      kind: (segment_kind))
+    (segment
+      name: (identifier)
+      kind: (segment_kind))))
