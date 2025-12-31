@@ -1,0 +1,22 @@
+# SPDX-FileCopyrightText: 2025 hyperpolymath
+# SPDX-License-Identifier: MIT OR AGPL-3.0-or-later
+
+[package]
+name = "anv-types"
+version = "0.1.0"
+edition = "2021"
+description = "Type system and type checking for the Anvomidav figure skating DSL"
+license = "MIT OR AGPL-3.0-or-later"
+repository = "https://github.com/hyperpolymath/anvomidav"
+readme = "README.md"
+keywords = ["figure-skating", "dsl", "types", "type-checking"]
+categories = ["compilers"]
+
+[dependencies]
+anv-core = { path = "../anv-core" }
+anv-syntax = { path = "../anv-syntax" }
+thiserror = { workspace = true }
+ordered-float = { workspace = true }
+
+[dev-dependencies]
+pretty_assertions = "1.4"
