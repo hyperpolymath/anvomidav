@@ -231,21 +231,37 @@ fn literal_parser() -> impl Parser<Token, Literal, Error = Simple<Token>> + Clon
     .labelled("literal")
 }
 
-/// Create time expression parser.
+/// Create time expression parser with arithmetic support.
 fn time_expr_parser(
     file_id: FileId,
 ) -> impl Parser<Token, TimeExpr, Error = Simple<Token>> + Clone {
-    let ident = ident_parser(file_id);
+    recursive(|time_expr| {
+        let ident = ident_parser(file_id);
 
-    let literal = select! {
-        Token::Float(f) => TimeExpr::Literal(f),
-        Token::Integer(n) => TimeExpr::Literal(OrderedFloat(n as f64)),
-        Token::Time(s) => TimeExpr::Formatted(s),
-    };
+        let literal = select! {
+            Token::Float(f) => TimeExpr::Literal(f),
+            Token::Integer(n) => TimeExpr::Literal(OrderedFloat(n as f64)),
+            Token::Time(s) => TimeExpr::Formatted(s),
+        };
 
-    let var = ident.map(TimeExpr::Var);
+        let var = ident.map(TimeExpr::Var);
 
-    literal.or(var).labelled("time expression")
+        let paren = time_expr
+            .clone()
+            .delimited_by(just(Token::LParen), just(Token::RParen));
+
+        let atom = choice((literal, var, paren));
+
+        // Time arithmetic: + and -
+        let add_op = just(Token::Plus)
+            .to(TimeBinOp::Add)
+            .or(just(Token::Minus).to(TimeBinOp::Sub));
+
+        atom.clone()
+            .then(add_op.then(atom).repeated())
+            .foldl(|left, (op, right)| TimeExpr::BinOp(Box::new(left), op, Box::new(right)))
+            .labelled("time expression")
+    })
 }
 
 /// Create position expression parser.
@@ -338,18 +354,16 @@ fn type_expr_parser(
     recursive(|type_expr| {
         let ident = ident_parser(file_id);
 
+        // Base type (not optional/array which are postfix)
         let named = ident.clone().map(TypeExpr::Named);
 
+        // Array type: [T]
         let array = type_expr
             .clone()
             .delimited_by(just(Token::LBracket), just(Token::RBracket))
             .map(|t| TypeExpr::Array(Box::new(t)));
 
-        let optional = type_expr
-            .clone()
-            .then_ignore(just(Token::Question))
-            .map(|t| TypeExpr::Optional(Box::new(t)));
-
+        // Tuple type: (T, U)
         let tuple = type_expr
             .clone()
             .separated_by(just(Token::Comma))
@@ -357,6 +371,7 @@ fn type_expr_parser(
             .delimited_by(just(Token::LParen), just(Token::RParen))
             .map(TypeExpr::Tuple);
 
+        // Generic type: T<U, V>
         let generic = ident
             .clone()
             .map(TypeExpr::Named)
@@ -369,7 +384,20 @@ fn type_expr_parser(
             )
             .map(|(base, args)| TypeExpr::App(Box::new(base), args));
 
-        choice((array, optional, tuple, generic, named)).labelled("type expression")
+        // Base types (without postfix operators)
+        let base_type = choice((array, tuple, generic, named));
+
+        // Optional postfix: T?
+        base_type
+            .then(just(Token::Question).or_not())
+            .map(|(t, q)| {
+                if q.is_some() {
+                    TypeExpr::Optional(Box::new(t))
+                } else {
+                    t
+                }
+            })
+            .labelled("type expression")
     })
 }
 
@@ -389,7 +417,12 @@ fn expr_parser(
             Token::False => Expr::Bool(false),
         };
 
-        let literal = choice((int, float, string, bool_lit));
+        // Time literal in expressions
+        let time_lit = select! {
+            Token::Time(s) => Expr::Time(TimeExpr::Formatted(s)),
+        };
+
+        let literal = choice((int, float, string, bool_lit, time_lit));
 
         // Variable
         let var = ident.clone().map(Expr::Var);
@@ -416,7 +449,28 @@ fn expr_parser(
             .delimited_by(just(Token::LBracket), just(Token::RBracket))
             .map(Expr::Array);
 
-        // Block expression
+        // Record literal { field: value, ... } - requires at least one field with colon
+        let record_field = ident
+            .clone()
+            .then_ignore(just(Token::Colon))
+            .then(expr.clone())
+            .map(|(name, value)| (name, value));
+
+        let record = record_field
+            .clone()
+            .then(
+                just(Token::Comma)
+                    .ignore_then(record_field)
+                    .repeated(),
+            )
+            .map(|(first, rest)| {
+                let mut fields = vec![first];
+                fields.extend(rest);
+                Expr::Record(fields)
+            })
+            .delimited_by(just(Token::LBrace), just(Token::RBrace));
+
+        // Block expression - simple version: { expr; expr; ... }
         let block = expr
             .clone()
             .map(|e| Stmt::Expr(e.node))
@@ -452,29 +506,92 @@ fn expr_parser(
                 Expr::Let(name, ty, Box::new(value), Box::new(body))
             });
 
+        // Lambda expression: |x, y| body or |x: T| body
+        let lambda_param = ident
+            .clone()
+            .then(just(Token::Colon).ignore_then(type_expr_parser(file_id)).or_not())
+            .map(|(name, ty)| Param { name, ty, default: None });
+
+        let lambda = lambda_param
+            .separated_by(just(Token::Comma))
+            .delimited_by(just(Token::Pipe), just(Token::Pipe))
+            .then(expr.clone())
+            .map(|(params, body)| Expr::Lambda(params, Box::new(body)));
+
+        // Match expression: match expr { pattern => body, ... }
+        let pattern = pattern_parser(file_id);
+        let match_arm = pattern
+            .then_ignore(just(Token::FatArrow))
+            .then(expr.clone())
+            .map(|(pat, body)| MatchArm {
+                pattern: pat,
+                guard: None,
+                body,
+            });
+
+        let match_expr = just(Token::Match)
+            .ignore_then(expr.clone())
+            .then(
+                match_arm
+                    .separated_by(just(Token::Comma))
+                    .allow_trailing()
+                    .delimited_by(just(Token::LBrace), just(Token::RBrace)),
+            )
+            .map(|(scrutinee, arms)| Expr::Match(Box::new(scrutinee), arms));
+
         // Atoms - box recursive parsers to prevent stack overflow
         let atom = choice((
             literal,
             if_expr.boxed(),
             let_expr.boxed(),
+            lambda.boxed(),
+            match_expr.boxed(),
             paren_or_tuple.boxed(),
             array.boxed(),
+            record.boxed(),
             block.boxed(),
             var,
         ))
         .map_with_span(move |e, span| spanned(e, span, file_id))
         .boxed();
 
-        // For now, just use atoms directly (function calls and field access to be added later)
-        // TODO: Add function calls and field access parsing
-        let primary = atom;
+        // Postfix operations: function calls, field access, indexing
+        let postfix = atom.then(
+            choice((
+                // Function call: expr(args)
+                expr.clone()
+                    .separated_by(just(Token::Comma))
+                    .allow_trailing()
+                    .delimited_by(just(Token::LParen), just(Token::RParen))
+                    .map(PostfixOp::Call),
+                // Field access: expr.field
+                just(Token::Dot)
+                    .ignore_then(ident.clone())
+                    .map(PostfixOp::Field),
+                // Index access: expr[index]
+                expr.clone()
+                    .delimited_by(just(Token::LBracket), just(Token::RBracket))
+                    .map(|e| PostfixOp::Index(Box::new(e))),
+            ))
+            .repeated(),
+        )
+        .foldl(move |left, op| {
+            let span = left.span.start as usize..left.span.end as usize + 1;
+            let new_expr = match op {
+                PostfixOp::Call(args) => Expr::Call(Box::new(left), args),
+                PostfixOp::Field(field) => Expr::Field(Box::new(left), field),
+                PostfixOp::Index(idx) => Expr::Index(Box::new(left), idx),
+            };
+            spanned(new_expr, span, file_id)
+        })
+        .boxed();
 
         // Unary operators
         let unary = just(Token::Minus)
             .to(UnaryOp::Neg)
             .or(just(Token::Not).to(UnaryOp::Not))
             .repeated()
-            .then(primary)
+            .then(postfix)
             .foldr(move |op, expr| {
                 let span = 0..expr.span.end as usize;
                 spanned(Expr::UnaryOp(op, Box::new(expr)), span, file_id)
@@ -550,6 +667,101 @@ fn expr_parser(
     })
 }
 
+/// Postfix operation types for expression parsing.
+#[derive(Clone)]
+enum PostfixOp {
+    Call(Vec<Spanned<Expr>>),
+    Field(Ident),
+    Index(Box<Spanned<Expr>>),
+}
+
+/// Create pattern parser.
+fn pattern_parser(
+    file_id: FileId,
+) -> impl Parser<Token, Pattern, Error = Simple<Token>> + Clone {
+    recursive(|pattern| {
+        let ident = ident_parser(file_id);
+
+        // Wildcard: _
+        let wildcard = just(Token::Ident("_".to_string())).to(Pattern::Wildcard);
+
+        // Literal patterns
+        let lit_int = select! { Token::Integer(n) => Pattern::Literal(Literal::Int(n)) };
+        let lit_float = select! { Token::Float(f) => Pattern::Literal(Literal::Float(f)) };
+        let lit_string = select! { Token::String(s) => Pattern::Literal(Literal::String(s)) };
+        let lit_bool = select! {
+            Token::True => Pattern::Literal(Literal::Bool(true)),
+            Token::False => Pattern::Literal(Literal::Bool(false)),
+        };
+
+        // Variable binding pattern (used in constructor fallback)
+        let _var = ident.clone().map(Pattern::Var);
+
+        // Tuple pattern: (p1, p2, ...)
+        let tuple = pattern
+            .clone()
+            .separated_by(just(Token::Comma))
+            .at_least(2)
+            .delimited_by(just(Token::LParen), just(Token::RParen))
+            .map(Pattern::Tuple);
+
+        // Record pattern: { field1: p1, field2: p2, ... }
+        let record_field = ident
+            .clone()
+            .then(just(Token::Colon).ignore_then(pattern.clone()).or_not())
+            .map(|(name, pat)| (name.clone(), pat.unwrap_or(Pattern::Var(name))));
+
+        let record = record_field
+            .separated_by(just(Token::Comma))
+            .allow_trailing()
+            .delimited_by(just(Token::LBrace), just(Token::RBrace))
+            .map(Pattern::Record);
+
+        // Constructor pattern: Name(patterns) or Name { fields }
+        let constructor = ident
+            .clone()
+            .then(
+                pattern
+                    .clone()
+                    .separated_by(just(Token::Comma))
+                    .delimited_by(just(Token::LParen), just(Token::RParen))
+                    .or_not(),
+            )
+            .map(|(name, args)| {
+                if let Some(args) = args {
+                    Pattern::Constructor(name, args)
+                } else {
+                    Pattern::Var(name)
+                }
+            });
+
+        // Or pattern: p1 | p2
+        let atom = choice((
+            wildcard,
+            lit_int,
+            lit_float,
+            lit_string,
+            lit_bool,
+            tuple.boxed(),
+            record.boxed(),
+            constructor,
+        ));
+
+        atom.clone()
+            .then(just(Token::Pipe).ignore_then(atom).repeated())
+            .map(|(first, rest)| {
+                if rest.is_empty() {
+                    first
+                } else {
+                    let mut patterns = vec![first];
+                    patterns.extend(rest);
+                    Pattern::Or(patterns)
+                }
+            })
+            .labelled("pattern")
+    })
+}
+
 /// Create timing parser.
 fn timing_parser(
     file_id: FileId,
@@ -572,22 +784,55 @@ fn timing_parser(
         .ignore_then(select! { Token::Integer(n) => n })
         .map(Timing::Beat);
 
-    choice((at, range, duration, beat)).labelled("timing")
+    // After timing: after <time>
+    let after = just(Token::Ident("after".to_string()))
+        .ignore_then(time.clone())
+        .map(Timing::After);
+
+    choice((at, range, duration, beat, after)).labelled("timing")
 }
 
-/// Create jump element parser.
+/// Create jump element parser with entry/exit edges and combinations.
 fn jump_element_parser(
     _file_id: FileId,
 ) -> impl Parser<Token, JumpElement, Error = Simple<Token>> + Clone {
-    just(Token::Jump)
+    // Entry edge (optional): from <edge>
+    let entry_edge = just(Token::From)
+        .ignore_then(edge_parser())
+        .or_not();
+
+    // Main jump: rotations + kind
+    let main_jump = rotations_parser().then(jump_kind_parser());
+
+    // Exit edge (optional): to <edge>
+    let exit_edge = just(Token::To)
+        .ignore_then(edge_parser())
+        .or_not();
+
+    // Combination jump (optional): + rotations kind
+    let combo_jump = just(Token::Plus)
         .ignore_then(rotations_parser())
         .then(jump_kind_parser())
-        .map(|(rotations, kind)| JumpElement {
+        .map(|(rot, kind)| JumpElement {
             kind,
-            rotations,
+            rotations: rot,
             entry_edge: None,
             exit_edge: None,
             combination: vec![],
+        })
+        .repeated();
+
+    just(Token::Jump)
+        .ignore_then(entry_edge)
+        .then(main_jump)
+        .then(exit_edge)
+        .then(combo_jump)
+        .map(|(((entry_edge, (rotations, kind)), exit_edge), combination)| JumpElement {
+            kind,
+            rotations,
+            entry_edge,
+            exit_edge,
+            combination,
         })
         .labelled("jump element")
 }
@@ -723,19 +968,102 @@ fn choreographic_kind_parser() -> impl Parser<Token, ChoreographicKind, Error = 
 fn choreographic_element_parser(
     _file_id: FileId,
 ) -> impl Parser<Token, ChoreographicElement, Error = Simple<Token>> + Clone {
-    just(Token::Choreographic)
-        .ignore_then(choreographic_kind_parser())
+    // Can also be just "choreographic" with optional kind
+    let with_kind = just(Token::Choreographic)
+        .ignore_then(choreographic_kind_parser().or_not())
         .map(|kind| ChoreographicElement {
-            kind,
+            kind: kind.unwrap_or(ChoreographicKind::Choreographic),
             description: None,
+        });
+
+    with_kind.labelled("choreographic element")
+}
+
+/// Create transition element parser.
+fn transition_element_parser(
+    _file_id: FileId,
+) -> impl Parser<Token, TransitionElement, Error = Simple<Token>> + Clone {
+    // transition [quality] ["description"]
+    let quality = select! {
+        Token::Ident(s) if s == "gliding" => MovementQuality::Gliding,
+        Token::Ident(s) if s == "stroking" => MovementQuality::Stroking,
+        Token::Ident(s) if s == "crossovers" => MovementQuality::Crossovers,
+        Token::Ident(s) if s == "edgework" => MovementQuality::EdgeWork,
+        Token::Ident(s) if s == "footwork" => MovementQuality::Footwork,
+    };
+
+    just(Token::Transition)
+        .ignore_then(quality.or_not())
+        .then(select! { Token::String(s) => s }.or_not())
+        .map(|(quality, description)| TransitionElement {
+            description,
+            quality,
         })
-        .labelled("choreographic element")
+        .labelled("transition element")
+}
+
+/// Create pattern element parser (ice dance).
+fn pattern_element_parser(
+    file_id: FileId,
+) -> impl Parser<Token, PatternElement, Error = Simple<Token>> + Clone {
+    let ident = ident_parser(file_id);
+
+    // Key point: position edge (e.g., (0.5, 0.5) LFO)
+    let key_point = position_expr_parser(file_id)
+        .then(edge_parser())
+        .map(|(position, edge)| KeyPoint { position, edge });
+
+    // pattern "name" [key_points]
+    just(Token::Pattern)
+        .ignore_then(
+            select! { Token::String(s) => s }
+                .or(ident.map(|i| i.node)),
+        )
+        .then(
+            key_point
+                .separated_by(just(Token::Comma))
+                .allow_trailing()
+                .delimited_by(just(Token::LBracket), just(Token::RBracket))
+                .or_not(),
+        )
+        .map(|(name, key_points)| PatternElement {
+            name,
+            key_points: key_points.unwrap_or_default(),
+        })
+        .labelled("pattern element")
+}
+
+/// Create annotation parser.
+fn annotation_parser(
+    file_id: FileId,
+) -> impl Parser<Token, Annotation, Error = Simple<Token>> + Clone {
+    let ident = ident_parser(file_id);
+    let expr = expr_parser(file_id);
+
+    // Token::At_ is the @ symbol, Token::At is the "at" keyword
+    just(Token::At_)
+        .ignore_then(ident)
+        .then(
+            expr.map(|e| e.node)
+                .separated_by(just(Token::Comma))
+                .allow_trailing()
+                .delimited_by(just(Token::LParen), just(Token::RParen))
+                .or_not(),
+        )
+        .map(|(name, args)| Annotation {
+            name,
+            args: args.unwrap_or_default(),
+        })
+        .labelled("annotation")
 }
 
 /// Create element parser.
 fn element_parser(
     file_id: FileId,
 ) -> impl Parser<Token, Element, Error = Simple<Token>> + Clone {
+    // Annotations before element: @name(args)
+    let annotations = annotation_parser(file_id).repeated();
+
     // Singles elements
     let jump = jump_element_parser(file_id).map(ElementKind::Jump);
     let spin = spin_element_parser(file_id).map(ElementKind::Spin);
@@ -750,18 +1078,84 @@ fn element_parser(
     // Choreographic elements
     let choreo = choreographic_element_parser(file_id).map(ElementKind::Choreographic);
 
-    let element_kind = choice((
-        jump, spin, step, lift, throw, twist, death_spiral, choreo,
-    ));
+    // Transition element
+    let transition = transition_element_parser(file_id).map(ElementKind::Transition);
 
-    element_kind
+    // Pattern element (ice dance)
+    let pattern = pattern_element_parser(file_id).map(ElementKind::Pattern);
+
+    // Position expression (optional): position (x, y)
+    let position_mod = just(Token::Position)
+        .ignore_then(position_expr_parser(file_id))
+        .or_not();
+
+    // Recursive elements for parallel/sync require boxed inner parser
+    let inner_elements = recursive(|inner| {
+        let element_kind = choice((
+            jump.clone(),
+            spin.clone(),
+            step.clone(),
+            lift.clone(),
+            throw.clone(),
+            twist.clone(),
+            death_spiral.clone(),
+            choreo.clone(),
+            transition.clone(),
+            pattern.clone(),
+        ));
+
+        // Parallel block: parallel { skater1: { ... }, skater2: { ... } }
+        let parallel_branch = ident_parser(file_id)
+            .then_ignore(just(Token::Colon))
+            .then(
+                inner
+                    .clone()
+                    .repeated()
+                    .delimited_by(just(Token::LBrace), just(Token::RBrace)),
+            );
+
+        let parallel = just(Token::Parallel)
+            .ignore_then(
+                parallel_branch
+                    .separated_by(just(Token::Comma))
+                    .allow_trailing()
+                    .delimited_by(just(Token::LBrace), just(Token::RBrace)),
+            )
+            .map(|branches| {
+                ElementKind::Parallel(ParallelElement { branches })
+            });
+
+        // Sync block: sync { elements }
+        let sync = just(Token::Sync)
+            .ignore_then(
+                inner
+                    .clone()
+                    .repeated()
+                    .delimited_by(just(Token::LBrace), just(Token::RBrace)),
+            )
+            .map(|elements| ElementKind::Sync(SyncElement { elements }));
+
+        choice((
+            parallel.boxed(),
+            sync.boxed(),
+            element_kind,
+        ))
         .then(timing_parser(file_id).or_not())
-        .map_with_span(move |(kind, timing), span| Element {
+        .then(position_mod.clone())
+        .map_with_span(move |((kind, timing), position), span| Element {
             kind,
             timing,
-            position: None,
+            position,
             annotations: vec![],
             span: to_span(span, file_id),
+        })
+    });
+
+    annotations
+        .then(inner_elements)
+        .map(|(annotations, mut element)| {
+            element.annotations = annotations;
+            element
         })
         .labelled("element")
 }
@@ -835,11 +1229,155 @@ fn import_parser(
         .labelled("import")
 }
 
+/// Create type definition parser.
+fn type_def_parser(
+    file_id: FileId,
+) -> impl Parser<Token, TypeDef, Error = Simple<Token>> + Clone {
+    let ident = ident_parser(file_id);
+
+    // Type parameters: <T, U, V> or <T: Bound, U: Bound1 + Bound2>
+    let type_param = ident
+        .clone()
+        .then(
+            just(Token::Colon)
+                .ignore_then(
+                    type_expr_parser(file_id)
+                        .separated_by(just(Token::Plus))
+                        .at_least(1),
+                )
+                .or_not(),
+        )
+        .map(|(name, bounds)| TypeParam {
+            name,
+            bounds: bounds.unwrap_or_default(),
+        });
+    let type_params = type_param
+        .separated_by(just(Token::Comma))
+        .delimited_by(just(Token::Lt), just(Token::Gt))
+        .or_not()
+        .map(|p| p.unwrap_or_default());
+
+    // Record field: name: Type
+    let record_field = ident
+        .clone()
+        .then_ignore(just(Token::Colon))
+        .then(type_expr_parser(file_id))
+        .map(|(name, ty)| Field {
+            name,
+            ty,
+            docs: vec![],
+        });
+
+    // Record body: { field1: T1, field2: T2 }
+    let record_body = record_field
+        .separated_by(just(Token::Comma))
+        .allow_trailing()
+        .delimited_by(just(Token::LBrace), just(Token::RBrace))
+        .map(TypeBody::Record);
+
+    // Enum variant field: name: Type (for record variants)
+    let variant_field = ident
+        .clone()
+        .then_ignore(just(Token::Colon))
+        .then(type_expr_parser(file_id))
+        .map(|(name, ty)| Field {
+            name,
+            ty,
+            docs: vec![],
+        });
+
+    // Enum variant: Name or Name(T1, T2) or Name { field: T }
+    let tuple_fields = type_expr_parser(file_id)
+        .separated_by(just(Token::Comma))
+        .delimited_by(just(Token::LParen), just(Token::RParen))
+        .map(move |types| {
+            // Convert tuple fields to anonymous fields
+            types
+                .into_iter()
+                .enumerate()
+                .map(|(i, ty)| Field {
+                    name: spanned(format!("_{}", i), 0..1, file_id),
+                    ty,
+                    docs: vec![],
+                })
+                .collect()
+        });
+
+    let record_fields = variant_field
+        .separated_by(just(Token::Comma))
+        .allow_trailing()
+        .delimited_by(just(Token::LBrace), just(Token::RBrace));
+
+    let enum_variant = ident
+        .clone()
+        .then(choice((tuple_fields, record_fields)).or_not())
+        .map(|(name, fields)| Variant {
+            name,
+            fields,
+            docs: vec![],
+        });
+
+    // Enum body: = Variant1 | Variant2 | ... (requires at least one | separator)
+    let enum_body = just(Token::Eq)
+        .ignore_then(enum_variant.clone())
+        .then(just(Token::Pipe).ignore_then(enum_variant).repeated().at_least(1))
+        .map(|(first, rest)| {
+            let mut variants = vec![first];
+            variants.extend(rest);
+            TypeBody::Enum(variants)
+        });
+
+    // Type alias: = SomeType
+    let alias_body = just(Token::Eq)
+        .ignore_then(type_expr_parser(file_id))
+        .map(TypeBody::Alias);
+
+    // type Name<T> = Body
+    // Order: record (requires {}), enum (requires |), alias (fallback)
+    just(Token::Type)
+        .ignore_then(ident.clone())
+        .then(type_params)
+        .then(choice((record_body, enum_body, alias_body)))
+        .map_with_span(move |((name, params), body), span| TypeDef {
+            name,
+            params,
+            body,
+            docs: vec![],
+            span: to_span(span, file_id),
+        })
+        .labelled("type definition")
+}
+
 /// Create function definition parser.
 fn fn_def_parser(
     file_id: FileId,
 ) -> impl Parser<Token, FnDef, Error = Simple<Token>> + Clone {
-    let param = ident_parser(file_id)
+    let ident = ident_parser(file_id);
+
+    // Type parameters: <T, U> or <T: Bound, U: Bound1 + Bound2>
+    let type_param = ident
+        .clone()
+        .then(
+            just(Token::Colon)
+                .ignore_then(
+                    type_expr_parser(file_id)
+                        .separated_by(just(Token::Plus))
+                        .at_least(1),
+                )
+                .or_not(),
+        )
+        .map(|(name, bounds)| TypeParam {
+            name,
+            bounds: bounds.unwrap_or_default(),
+        });
+    let type_params = type_param
+        .separated_by(just(Token::Comma))
+        .delimited_by(just(Token::Lt), just(Token::Gt))
+        .or_not()
+        .map(|p| p.unwrap_or_default());
+
+    let param = ident
+        .clone()
         .then(just(Token::Colon).ignore_then(type_expr_parser(file_id)).or_not())
         .map(|(name, ty)| Param {
             name,
@@ -848,7 +1386,8 @@ fn fn_def_parser(
         });
 
     just(Token::Fn)
-        .ignore_then(ident_parser(file_id))
+        .ignore_then(ident.clone())
+        .then(type_params)
         .then(
             param
                 .separated_by(just(Token::Comma))
@@ -858,9 +1397,9 @@ fn fn_def_parser(
         .then(just(Token::Arrow).ignore_then(type_expr_parser(file_id)).or_not())
         .then_ignore(just(Token::Eq))
         .then(expr_parser(file_id))
-        .map_with_span(move |(((name, params), return_ty), body), span| FnDef {
+        .map_with_span(move |((((name, type_params), params), return_ty), body), span| FnDef {
             name,
-            type_params: vec![],
+            type_params,
             params,
             return_ty,
             body: body.node,
@@ -887,6 +1426,7 @@ fn program_parser(
         .then(
             choice((
                 import_parser(file_id).map(Item::Import),
+                type_def_parser(file_id).map(Item::Type),
                 fn_def_parser(file_id).map(Item::Fn),
                 segment_parser(file_id).map(Item::Segment),
             ))
@@ -896,12 +1436,14 @@ fn program_parser(
         .then_ignore(end())
         .map(move |((docs, name), items)| {
             let mut imports = vec![];
+            let mut types = vec![];
             let mut functions = vec![];
             let mut segments = vec![];
 
             for item in items {
                 match item {
                     Item::Import(i) => imports.push(i),
+                    Item::Type(t) => types.push(t),
                     Item::Fn(f) => functions.push(f),
                     Item::Segment(s) => segments.push(s),
                 }
@@ -911,7 +1453,7 @@ fn program_parser(
                 name,
                 docs,
                 imports,
-                types: vec![],
+                types,
                 functions,
                 segments,
             }
@@ -922,6 +1464,7 @@ fn program_parser(
 /// Internal enum for collecting program items.
 enum Item {
     Import(Import),
+    Type(TypeDef),
     Fn(FnDef),
     Segment(Segment),
 }
@@ -1368,5 +1911,529 @@ program test {}
         assert_eq!(program.docs[0], "Title");
         assert_eq!(program.docs[1], "");
         assert_eq!(program.docs[2], "Description after blank line");
+    }
+
+    // === Type Definition Tests ===
+
+    #[test]
+    fn test_parse_type_alias() {
+        let source = "program t { type Speed = Float }";
+        let result = parse(source, FileId(0));
+        assert!(result.is_ok(), "Parse failed: {:?}", result.err());
+        let program = result.unwrap();
+        assert_eq!(program.types.len(), 1);
+        assert_eq!(program.types[0].name.node, "Speed");
+        assert!(matches!(program.types[0].body, TypeBody::Alias(_)));
+    }
+
+    #[test]
+    fn test_parse_type_record() {
+        let source = "program t { type Point { x: Float, y: Float } }";
+        let result = parse(source, FileId(0));
+        assert!(result.is_ok(), "Parse failed: {:?}", result.err());
+        let program = result.unwrap();
+        assert_eq!(program.types.len(), 1);
+        match &program.types[0].body {
+            TypeBody::Record(fields) => {
+                assert_eq!(fields.len(), 2);
+                assert_eq!(fields[0].name.node, "x");
+                assert_eq!(fields[1].name.node, "y");
+            }
+            _ => panic!("Expected record type"),
+        }
+    }
+
+    #[test]
+    fn test_parse_type_enum() {
+        let source = "program t { type Direction = North | South | East | West }";
+        let result = parse(source, FileId(0));
+        assert!(result.is_ok(), "Parse failed: {:?}", result.err());
+        let program = result.unwrap();
+        assert_eq!(program.types.len(), 1);
+        match &program.types[0].body {
+            TypeBody::Enum(variants) => {
+                assert_eq!(variants.len(), 4);
+                assert_eq!(variants[0].name.node, "North");
+                assert_eq!(variants[3].name.node, "West");
+            }
+            _ => panic!("Expected enum type"),
+        }
+    }
+
+    #[test]
+    fn test_parse_type_enum_with_fields() {
+        let source = "program t { type Option = None | Some(T) }";
+        let result = parse(source, FileId(0));
+        assert!(result.is_ok(), "Parse failed: {:?}", result.err());
+        let program = result.unwrap();
+        match &program.types[0].body {
+            TypeBody::Enum(variants) => {
+                assert_eq!(variants.len(), 2);
+                assert!(variants[0].fields.is_none());
+                assert!(variants[1].fields.is_some());
+            }
+            _ => panic!("Expected enum type"),
+        }
+    }
+
+    #[test]
+    fn test_parse_type_with_params() {
+        let source = "program t { type Container<T> { value: T } }";
+        let result = parse(source, FileId(0));
+        assert!(result.is_ok(), "Parse failed: {:?}", result.err());
+        let program = result.unwrap();
+        assert_eq!(program.types[0].params.len(), 1);
+        assert_eq!(program.types[0].params[0].name.node, "T");
+    }
+
+    #[test]
+    fn test_parse_type_with_bounded_params() {
+        let source = "program t { type Numeric<T: Number + Ord> { value: T } }";
+        let result = parse(source, FileId(0));
+        assert!(result.is_ok(), "Parse failed: {:?}", result.err());
+        let program = result.unwrap();
+        assert_eq!(program.types[0].params.len(), 1);
+        assert_eq!(program.types[0].params[0].bounds.len(), 2);
+    }
+
+    // === Function Definition Tests ===
+
+    #[test]
+    fn test_parse_function_def() {
+        let source = "program t { fn add(x: Int, y: Int) -> Int = x }";
+        let result = parse(source, FileId(0));
+        assert!(result.is_ok(), "Parse failed: {:?}", result.err());
+        let program = result.unwrap();
+        assert_eq!(program.functions.len(), 1);
+        assert_eq!(program.functions[0].name.node, "add");
+        assert_eq!(program.functions[0].params.len(), 2);
+    }
+
+    #[test]
+    fn test_parse_function_with_type_params() {
+        let source = "program t { fn identity<T>(x: T) -> T = x }";
+        let result = parse(source, FileId(0));
+        assert!(result.is_ok(), "Parse failed: {:?}", result.err());
+        let program = result.unwrap();
+        assert_eq!(program.functions[0].type_params.len(), 1);
+        assert_eq!(program.functions[0].type_params[0].name.node, "T");
+    }
+
+    // === Transition Element Tests ===
+
+    #[test]
+    fn test_parse_transition_element() {
+        let source = r#"program t { segment s: free { sequence { transition gliding "crossovers" } } }"#;
+        let result = parse(source, FileId(0));
+        assert!(result.is_ok());
+        let program = result.unwrap();
+        let element = &program.segments[0].sequences[0].elements[0];
+        match &element.kind {
+            ElementKind::Transition(t) => {
+                assert_eq!(t.quality, Some(MovementQuality::Gliding));
+                assert_eq!(t.description, Some("crossovers".to_string()));
+            }
+            _ => panic!("Expected transition element"),
+        }
+    }
+
+    #[test]
+    fn test_parse_transition_qualities() {
+        // Only these qualities are supported in the parser
+        let qualities = ["gliding", "stroking", "crossovers", "edgework", "footwork"];
+        for quality in qualities {
+            let source = format!(
+                r#"program t {{ segment s: free {{ sequence {{ transition {} }} }} }}"#,
+                quality
+            );
+            let result = parse(&source, FileId(0));
+            assert!(result.is_ok(), "Failed to parse transition quality: {}", quality);
+        }
+    }
+
+    // === Pattern Element Tests (Ice Dance) ===
+
+    #[test]
+    fn test_parse_pattern_element() {
+        let source = r#"program t { segment s: rhythm { sequence { pattern "Starlight Waltz" } } }"#;
+        let result = parse(source, FileId(0));
+        assert!(result.is_ok());
+        let program = result.unwrap();
+        let element = &program.segments[0].sequences[0].elements[0];
+        match &element.kind {
+            ElementKind::Pattern(p) => {
+                assert_eq!(p.name, "Starlight Waltz");
+            }
+            _ => panic!("Expected pattern element"),
+        }
+    }
+
+    // === Parallel and Sync Element Tests ===
+
+    #[test]
+    fn test_parse_parallel_element() {
+        // Parallel requires named branches: parallel { skater1: { ... }, skater2: { ... } }
+        let source = "program t { segment s: free { sequence { parallel { skater1: { jump triple axel }, skater2: { spin camel L3 } } } } }";
+        let result = parse(source, FileId(0));
+        assert!(result.is_ok(), "Parse failed: {:?}", result.err());
+        let program = result.unwrap();
+        let element = &program.segments[0].sequences[0].elements[0];
+        match &element.kind {
+            ElementKind::Parallel(p) => {
+                assert_eq!(p.branches.len(), 2);
+            }
+            _ => panic!("Expected parallel element"),
+        }
+    }
+
+    #[test]
+    fn test_parse_sync_element() {
+        // Sync contains elements in a single block: sync { element1 element2 }
+        let source = "program t { segment s: free { sequence { sync { jump triple axel jump triple toe_loop } } } }";
+        let result = parse(source, FileId(0));
+        assert!(result.is_ok(), "Parse failed: {:?}", result.err());
+        let program = result.unwrap();
+        let element = &program.segments[0].sequences[0].elements[0];
+        match &element.kind {
+            ElementKind::Sync(s) => {
+                assert_eq!(s.elements.len(), 2);
+            }
+            _ => panic!("Expected sync element"),
+        }
+    }
+
+    // === Timing Tests ===
+
+    #[test]
+    fn test_parse_after_timing() {
+        let source = "program t { segment s: free { sequence { jump triple axel after 1:00 } } }";
+        let result = parse(source, FileId(0));
+        assert!(result.is_ok());
+        let program = result.unwrap();
+        let element = &program.segments[0].sequences[0].elements[0];
+        assert!(element.timing.is_some());
+        match &element.timing {
+            Some(Timing::After(_)) => {}
+            _ => panic!("Expected after timing"),
+        }
+    }
+
+    #[test]
+    fn test_parse_range_timing() {
+        // Range timing uses time..time syntax (no "during" keyword needed)
+        let source = "program t { segment s: free { sequence { jump triple axel 0:30..1:00 } } }";
+        let result = parse(source, FileId(0));
+        assert!(result.is_ok(), "Parse failed: {:?}", result.err());
+        let program = result.unwrap();
+        let element = &program.segments[0].sequences[0].elements[0];
+        match &element.timing {
+            Some(Timing::Range(_, _)) => {}
+            _ => panic!("Expected range timing"),
+        }
+    }
+
+    // === Annotation Tests ===
+
+    #[test]
+    fn test_parse_annotation_simple() {
+        let source = "program t { segment s: free { sequence { @highlight jump triple axel } } }";
+        let result = parse(source, FileId(0));
+        assert!(result.is_ok(), "Parse failed: {:?}", result.err());
+        let program = result.unwrap();
+        let element = &program.segments[0].sequences[0].elements[0];
+        assert_eq!(element.annotations.len(), 1);
+        assert_eq!(element.annotations[0].name.node, "highlight");
+    }
+
+    #[test]
+    fn test_parse_annotation_with_args() {
+        let source = r#"program t { segment s: free { sequence { @color("blue", 1.0) jump triple axel } } }"#;
+        let result = parse(source, FileId(0));
+        assert!(result.is_ok());
+        let program = result.unwrap();
+        let element = &program.segments[0].sequences[0].elements[0];
+        assert_eq!(element.annotations.len(), 1);
+        assert_eq!(element.annotations[0].args.len(), 2);
+    }
+
+    #[test]
+    fn test_parse_multiple_annotations() {
+        let source = "program t { segment s: free { sequence { @highlight @important jump triple axel } } }";
+        let result = parse(source, FileId(0));
+        assert!(result.is_ok());
+        let program = result.unwrap();
+        let element = &program.segments[0].sequences[0].elements[0];
+        assert_eq!(element.annotations.len(), 2);
+    }
+
+    // === Jump Combination Tests ===
+
+    #[test]
+    fn test_parse_jump_combination() {
+        let source = "program t { segment s: free { sequence { jump triple lutz + double toe_loop } } }";
+        let result = parse(source, FileId(0));
+        assert!(result.is_ok());
+        let program = result.unwrap();
+        let element = &program.segments[0].sequences[0].elements[0];
+        match &element.kind {
+            ElementKind::Jump(j) => {
+                assert_eq!(j.combination.len(), 1);
+                assert_eq!(j.combination[0].kind, JumpKind::ToeLoop);
+                assert_eq!(j.combination[0].rotations, Rotations::Double);
+            }
+            _ => panic!("Expected jump element"),
+        }
+    }
+
+    #[test]
+    fn test_parse_jump_triple_combination() {
+        let source = "program t { segment s: free { sequence { jump triple axel + double toe_loop + double loop } } }";
+        let result = parse(source, FileId(0));
+        assert!(result.is_ok());
+        let program = result.unwrap();
+        let element = &program.segments[0].sequences[0].elements[0];
+        match &element.kind {
+            ElementKind::Jump(j) => {
+                assert_eq!(j.combination.len(), 2);
+            }
+            _ => panic!("Expected jump element"),
+        }
+    }
+
+    // Note: Jump with edges (from/to) is defined in the AST but
+    // the parser uses entry_edge/exit_edge without the from/to syntax.
+    // This test verifies basic jump parsing still works.
+    #[test]
+    fn test_parse_jump_basic() {
+        let source = "program t { segment s: free { sequence { jump triple lutz } } }";
+        let result = parse(source, FileId(0));
+        assert!(result.is_ok(), "Parse failed: {:?}", result.err());
+        let program = result.unwrap();
+        let element = &program.segments[0].sequences[0].elements[0];
+        match &element.kind {
+            ElementKind::Jump(j) => {
+                assert_eq!(j.kind, JumpKind::Lutz);
+                assert_eq!(j.rotations, Rotations::Triple);
+            }
+            _ => panic!("Expected jump element"),
+        }
+    }
+
+    // === Expression Tests ===
+
+    #[test]
+    fn test_parse_field_access() {
+        // Field access in function body
+        let source = "program t { fn get_x(p: Point) = p.x }";
+        let result = parse(source, FileId(0));
+        assert!(result.is_ok(), "Parse failed: {:?}", result.err());
+        let program = result.unwrap();
+        match &program.functions[0].body {
+            Expr::Field(_, field) => {
+                assert_eq!(field.node, "x");
+            }
+            _ => panic!("Expected field access expression"),
+        }
+    }
+
+    #[test]
+    fn test_parse_function_call_expr() {
+        let source = "program t { fn call() = add(1, 2) }";
+        let result = parse(source, FileId(0));
+        assert!(result.is_ok(), "Parse failed: {:?}", result.err());
+        let program = result.unwrap();
+        match &program.functions[0].body {
+            Expr::Call(_, args) => {
+                assert_eq!(args.len(), 2);
+            }
+            _ => panic!("Expected function call expression"),
+        }
+    }
+
+    #[test]
+    fn test_parse_index_access() {
+        let source = "program t { fn get_first(arr: Array) = arr[0] }";
+        let result = parse(source, FileId(0));
+        assert!(result.is_ok(), "Parse failed: {:?}", result.err());
+        let program = result.unwrap();
+        match &program.functions[0].body {
+            Expr::Index(_, _) => {}
+            _ => panic!("Expected index access expression"),
+        }
+    }
+
+    #[test]
+    fn test_parse_lambda_expression() {
+        let source = "program t { fn make_adder() = |x, y| x }";
+        let result = parse(source, FileId(0));
+        assert!(result.is_ok(), "Parse failed: {:?}", result.err());
+        let program = result.unwrap();
+        match &program.functions[0].body {
+            Expr::Lambda(params, _) => {
+                assert_eq!(params.len(), 2);
+            }
+            _ => panic!("Expected lambda expression"),
+        }
+    }
+
+    #[test]
+    fn test_parse_match_expression() {
+        let source = "program t { fn check(x: Int) = match x { 0 => true, _ => false } }";
+        let result = parse(source, FileId(0));
+        assert!(result.is_ok(), "Parse failed: {:?}", result.err());
+        let program = result.unwrap();
+        match &program.functions[0].body {
+            Expr::Match(_, arms) => {
+                assert_eq!(arms.len(), 2);
+            }
+            _ => panic!("Expected match expression"),
+        }
+    }
+
+    #[test]
+    fn test_parse_record_literal() {
+        let source = "program t { fn make_point() = { x: 1, y: 2 } }";
+        let result = parse(source, FileId(0));
+        assert!(result.is_ok(), "Parse failed: {:?}", result.err());
+        let program = result.unwrap();
+        match &program.functions[0].body {
+            Expr::Record(fields) => {
+                assert_eq!(fields.len(), 2);
+            }
+            _ => panic!("Expected record expression"),
+        }
+    }
+
+    #[test]
+    fn test_parse_tuple_expression() {
+        let source = "program t { fn make_pair() = (1, 2) }";
+        let result = parse(source, FileId(0));
+        assert!(result.is_ok(), "Parse failed: {:?}", result.err());
+        let program = result.unwrap();
+        match &program.functions[0].body {
+            Expr::Tuple(elements) => {
+                assert_eq!(elements.len(), 2);
+            }
+            _ => panic!("Expected tuple expression"),
+        }
+    }
+
+    #[test]
+    fn test_parse_array_expression() {
+        let source = "program t { fn make_list() = [1, 2, 3] }";
+        let result = parse(source, FileId(0));
+        assert!(result.is_ok(), "Parse failed: {:?}", result.err());
+        let program = result.unwrap();
+        match &program.functions[0].body {
+            Expr::Array(elements) => {
+                assert_eq!(elements.len(), 3);
+            }
+            _ => panic!("Expected array expression"),
+        }
+    }
+
+    // === Binary Operation Tests ===
+
+    #[test]
+    fn test_parse_arithmetic_operations() {
+        let ops = ["+", "-", "*", "/"];
+        for op in ops {
+            let source = format!("program t {{ fn calc() = 1 {} 2 }}", op);
+            let result = parse(&source, FileId(0));
+            assert!(result.is_ok(), "Failed to parse arithmetic op: {}", op);
+        }
+    }
+
+    #[test]
+    fn test_parse_comparison_operations() {
+        let ops = ["<", ">", "<=", ">=", "==", "!="];
+        for op in ops {
+            let source = format!("program t {{ fn cmp() = 1 {} 2 }}", op);
+            let result = parse(&source, FileId(0));
+            assert!(result.is_ok(), "Failed to parse comparison op: {}", op);
+        }
+    }
+
+    #[test]
+    fn test_parse_logical_operations() {
+        let source = "program t { fn logic() = true && false || true }";
+        let result = parse(source, FileId(0));
+        assert!(result.is_ok(), "Parse failed: {:?}", result.err());
+    }
+
+    // === Position Expression Tests ===
+
+    #[test]
+    fn test_parse_rink_positions() {
+        let positions = ["center", "long_axis", "short_axis"];
+        for pos in positions {
+            let source = format!(
+                "program t {{ segment s: free {{ sequence {{ jump triple axel at {} }} }} }}",
+                pos
+            );
+            let result = parse(&source, FileId(0));
+            assert!(result.is_ok(), "Failed to parse position: {}", pos);
+        }
+    }
+
+    // === Complex Program Tests ===
+
+    #[test]
+    fn test_parse_program_with_types_and_functions() {
+        let source = r#"
+            program test_prog {
+                type Speed = Float
+                fn entry_speed() -> Speed = 5.0
+            }
+        "#;
+        let result = parse(source, FileId(0));
+        assert!(result.is_ok(), "Failed to parse program: {:?}", result.err());
+        let program = result.unwrap();
+        assert_eq!(program.types.len(), 1);
+        assert_eq!(program.functions.len(), 1);
+    }
+
+    #[test]
+    fn test_parse_complete_short_program() {
+        let source = r#"
+            /// A short program
+            program championship {
+                segment sp: short {
+                    sequence opening {
+                        jump triple axel at 0:15
+                        spin camel L4 at 0:45
+                    }
+                    sequence jumps {
+                        jump triple lutz at 1:00
+                        jump triple flip at 1:30
+                    }
+                }
+            }
+        "#;
+        let result = parse(source, FileId(0));
+        assert!(result.is_ok(), "Failed to parse short program: {:?}", result.err());
+        let program = result.unwrap();
+        assert_eq!(program.segments.len(), 1);
+        assert_eq!(program.segments[0].sequences.len(), 2);
+    }
+
+    #[test]
+    fn test_parse_pairs_elements() {
+        let source = r#"
+            program pairs_skating {
+                segment fs: free {
+                    sequence lifts {
+                        lift Gr4 L4 at 0:30
+                        twist triple L3 at 1:00
+                        throw triple lutz at 1:30
+                        death_spiral LBI L4 at 2:00
+                    }
+                }
+            }
+        "#;
+        let result = parse(source, FileId(0));
+        assert!(result.is_ok(), "Failed to parse pairs program: {:?}", result.err());
+        let program = result.unwrap();
+        assert_eq!(program.segments[0].sequences[0].elements.len(), 4);
     }
 }
