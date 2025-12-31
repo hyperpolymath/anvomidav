@@ -189,7 +189,7 @@ impl Type {
             Type::Tuple(ts) => ts.iter().any(|t| t.has_vars()),
             Type::Array(t) | Type::Optional(t) => t.has_vars(),
             Type::Record(fields) => fields.iter().any(|(_, t)| t.has_vars()),
-            Type::Variant(variants) => variants.iter().any(|(_, t)| t.as_ref().map_or(false, |t| t.has_vars())),
+            Type::Variant(variants) => variants.iter().any(|(_, t)| t.as_ref().is_some_and(|t| t.has_vars())),
             Type::App(base, args) => base.has_vars() || args.iter().any(|t| t.has_vars()),
             Type::Refinement { base, .. } => base.has_vars(),
             _ => false,

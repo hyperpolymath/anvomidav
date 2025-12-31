@@ -659,10 +659,10 @@ impl<'src> Lexer<'src> {
 
     /// Tokenize the entire source, returning all tokens with their spans.
     pub fn tokenize(source: &str) -> Result<Vec<SpannedToken>, LexError> {
-        let mut lexer = Lexer::new(source);
+        let lexer = Lexer::new(source);
         let mut tokens = Vec::new();
 
-        while let Some(result) = lexer.next() {
+        for result in lexer {
             match result {
                 Ok(token) => tokens.push(token),
                 Err(e) => return Err(e),
@@ -747,14 +747,14 @@ mod tests {
 
     #[test]
     fn test_literals() {
-        let source = r#"42 3.14 1:30 2:30:45 "hello world" my_var"#;
+        let source = r#"42 2.5 1:30 2:30:45 "hello world" my_var"#;
         let tokens: Vec<_> = Lexer::new(source)
             .map(|r| r.unwrap().token)
             .collect();
 
         assert_eq!(tokens, vec![
             Token::Integer(42),
-            Token::Float(OrderedFloat(3.14)),
+            Token::Float(OrderedFloat(2.5)),
             Token::Time("1:30".to_string()),
             Token::Time("2:30:45".to_string()),
             Token::String("hello world".to_string()),
