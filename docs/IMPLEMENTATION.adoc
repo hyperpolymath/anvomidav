@@ -1,0 +1,944 @@
+// SPDX-FileCopyrightText: 2025 hyperpolymath
+// SPDX-License-Identifier: MIT OR AGPL-3.0-or-later
+
+= Anvomidav Implementation Plan: Rust Architecture
+:toc: macro
+:toc-title: Contents
+:toclevels: 3
+:sectnums:
+
+== Overview
+
+This document defines the complete Rust-based implementation architecture for Anvomidav. All components—compiler, runtime, tooling, and visualization—are implemented in Rust, with WASM compilation for browser/mobile deployment.
+
+toc::[]
+
+== Project Structure
+
+[source]
+----
+anvomidav/
+├── Cargo.toml                    # Workspace root
+├── crates/
+│   ├── anv-syntax/               # Lexer, parser, AST
+│   ├── anv-types/                # Type system, inference
+│   ├── anv-semantics/            # Semantic analysis, ISU rules
+│   ├── anv-ir/                   # Intermediate representation
+│   ├── anv-codegen/              # Code generation (bytecode/WASM)
+│   ├── anv-runtime/              # Bytecode interpreter, execution
+│   ├── anv-physics/              # Physics simulation, validation
+│   ├── anv-spatial/              # Geometry, paths, collision
+│   ├── anv-temporal/             # Timing, scheduling, music sync
+│   ├── anv-viz/                  # Visualization engine
+│   ├── anv-lsp/                  # Language server
+│   ├── anv-cli/                  # Command-line interface
+│   ├── anv-fmt/                  # Code formatter
+│   ├── anv-pkg/                  # Package manager
+│   └── anv-core/                 # Shared types, utilities
+├── stdlib/                       # Standard library (.anv files)
+├── editors/
+│   ├── vscode/                   # VS Code extension
+│   ├── tree-sitter-anv/          # Tree-sitter grammar
+│   └── helix/                    # Helix configuration
+├── web/                          # Web UI (ReScript)
+├── docs/                         # Documentation
+└── tests/                        # Integration tests
+----
+
+== Crate Dependency Graph
+
+[source]
+----
+                    ┌─────────────┐
+                    │  anv-cli    │
+                    └──────┬──────┘
+                           │
+        ┌──────────────────┼──────────────────┐
+        │                  │                  │
+        ▼                  ▼                  ▼
+┌──────────────┐  ┌──────────────┐  ┌──────────────┐
+│   anv-lsp    │  │   anv-fmt    │  │   anv-pkg    │
+└──────┬───────┘  └──────┬───────┘  └──────────────┘
+       │                 │
+       └────────┬────────┘
+                │
+                ▼
+        ┌──────────────┐
+        │ anv-codegen  │
+        └──────┬───────┘
+               │
+               ▼
+        ┌──────────────┐
+        │   anv-ir     │
+        └──────┬───────┘
+               │
+               ▼
+        ┌──────────────┐      ┌──────────────┐
+        │anv-semantics │◄────►│  anv-types   │
+        └──────┬───────┘      └──────┬───────┘
+               │                     │
+               └──────────┬──────────┘
+                          │
+                          ▼
+                  ┌──────────────┐
+                  │  anv-syntax  │
+                  └──────┬───────┘
+                         │
+                         ▼
+                  ┌──────────────┐
+                  │   anv-core   │
+                  └──────────────┘
+
+Runtime Side:
+┌──────────────┐
+│ anv-runtime  │
+└──────┬───────┘
+       │
+       ├──────────────┬──────────────┐
+       ▼              ▼              ▼
+┌────────────┐ ┌────────────┐ ┌────────────┐
+│anv-physics │ │anv-spatial │ │anv-temporal│
+└────────────┘ └────────────┘ └────────────┘
+       │              │              │
+       └──────────────┴──────────────┘
+                      │
+                      ▼
+              ┌──────────────┐
+              │   anv-viz    │
+              └──────────────┘
+----
+
+== Crate Specifications
+
+=== anv-core
+
+Shared types and utilities used across all crates.
+
+[source,rust]
+----
+// Core domain types
+pub struct Time(pub f64);           // Seconds
+pub struct Duration(pub f64);       // Seconds
+pub struct Angle(pub f64);          // Radians
+pub struct Position { pub x: f64, pub y: f64 }
+pub struct Position3 { pub x: f64, pub y: f64, pub z: f64 }
+
+// Skating primitives
+pub enum Edge { LFO, LFI, LBO, LBI, RFO, RFI, RBO, RBI }
+pub enum Foot { Left, Right }
+pub enum Direction { Forward, Backward }
+pub enum Curve { Inside, Outside, Flat }
+pub enum Level { B, L1, L2, L3, L4 }
+
+// Source locations
+pub struct Span { pub start: usize, pub end: usize, pub file_id: FileId }
+pub struct Spanned<T> { pub node: T, pub span: Span }
+
+// Diagnostics
+pub struct Diagnostic { pub severity: Severity, pub message: String, pub span: Span, pub notes: Vec<Note> }
+----
+
+**Dependencies:** None (leaf crate)
+
+=== anv-syntax
+
+Lexer, parser, and AST definitions.
+
+[source,rust]
+----
+// Token types
+pub enum TokenKind {
+    // Keywords
+    Program, Element, Sequence, Choreography,
+    At, Duration, Sync, Path,
+    // Elements
+    Axel, Salchow, ToeLoop, Loop, Flip, Lutz,
+    Spin, Upright, Sit, Camel, Layback,
+    StepSequence, ChoreographicSequence,
+    // Modifiers
+    Triple, Quad, Level, Flying,
+    Forward, Backward, Inside, Outside,
+    // Literals
+    Integer(i64), Float(f64), Time(f64), String(String),
+    Identifier(String),
+    // Punctuation
+    LParen, RParen, LBrace, RBrace, LBracket, RBracket,
+    Comma, Semicolon, Colon, At, Arrow,
+    // Operators
+    Plus, Minus, Star, Slash, Lt, Gt, Eq, Ne,
+    // Special
+    Eof, Error,
+}
+
+// AST nodes
+pub enum Expr {
+    Literal(Literal),
+    Ident(Ident),
+    Binary { op: BinOp, lhs: Box<Expr>, rhs: Box<Expr> },
+    Call { func: Box<Expr>, args: Vec<Expr> },
+    // ... etc
+}
+
+pub enum Stmt {
+    Element(ElementStmt),
+    At { time: Expr, body: Vec<Stmt> },
+    Sync { beat: Expr, body: Vec<Stmt> },
+    Sequence(Vec<Stmt>),
+    // ... etc
+}
+
+pub struct Program {
+    pub header: ProgramHeader,
+    pub imports: Vec<Import>,
+    pub declarations: Vec<Decl>,
+    pub choreographies: Vec<Choreography>,
+}
+----
+
+**Key crates:**
+- `logos` - Lexer generation
+- `rowan` - Lossless syntax trees (for IDE support)
+- `lalrpop` or `chumsky` - Parser
+
+=== anv-types
+
+Type system implementation with refinement types.
+
+[source,rust]
+----
+// Types
+pub enum Type {
+    // Primitives
+    Unit, Bool, Int, Float, String,
+    // Dimensional
+    Time, Duration, Angle, Position, Velocity,
+    // Skating
+    Edge, Level, Element, Jump, Spin, Step, Lift,
+    // Compound
+    Tuple(Vec<Type>),
+    Record(Vec<(String, Type)>),
+    Function { params: Vec<Type>, ret: Box<Type>, effects: Effects },
+    // Polymorphic
+    Var(TypeVar),
+    Forall { vars: Vec<TypeVar>, body: Box<Type> },
+    // Refinement
+    Refined { base: Box<Type>, predicate: Predicate },
+    // Dependent
+    Dependent { param: String, param_ty: Box<Type>, body: Box<Type> },
+}
+
+// Refinement predicates (for SMT)
+pub enum Predicate {
+    True,
+    False,
+    Var(String),
+    Int(i64),
+    Binary { op: PredOp, lhs: Box<Predicate>, rhs: Box<Predicate> },
+    App { func: String, args: Vec<Predicate> },
+}
+
+// Type inference
+pub struct TypeChecker {
+    env: TypeEnv,
+    constraints: Vec<Constraint>,
+    smt: SmtContext,
+}
+
+impl TypeChecker {
+    pub fn infer(&mut self, expr: &Expr) -> Result<Type, TypeError>;
+    pub fn check(&mut self, expr: &Expr, expected: &Type) -> Result<(), TypeError>;
+    pub fn unify(&mut self, t1: &Type, t2: &Type) -> Result<Substitution, TypeError>;
+    pub fn solve_refinements(&mut self) -> Result<(), RefinementError>;
+}
+----
+
+**Key crates:**
+- `z3` - SMT solver for refinement types
+- `ena` - Union-find for type inference
+
+=== anv-semantics
+
+Semantic analysis and ISU rule checking.
+
+[source,rust]
+----
+// ISU Rules
+pub struct IsuRules {
+    pub discipline: Discipline,
+    pub category: Category,
+    pub season: Season,
+}
+
+impl IsuRules {
+    pub fn check_program(&self, program: &TypedProgram) -> Vec<RuleViolation>;
+    pub fn check_element(&self, element: &Element) -> Vec<RuleViolation>;
+    pub fn check_combination(&self, combo: &[Jump]) -> Vec<RuleViolation>;
+    pub fn calculate_base_value(&self, element: &Element) -> f64;
+}
+
+// Semantic analysis
+pub struct SemanticAnalyzer {
+    pub type_checker: TypeChecker,
+    pub isu_rules: IsuRules,
+    pub temporal_checker: TemporalChecker,
+    pub spatial_checker: SpatialChecker,
+}
+
+impl SemanticAnalyzer {
+    pub fn analyze(&mut self, program: &Program) -> Result<TypedProgram, SemanticError>;
+}
+
+// Typed AST (output of semantic analysis)
+pub struct TypedProgram {
+    pub program: Program,
+    pub types: HashMap<NodeId, Type>,
+    pub symbols: SymbolTable,
+    pub timeline: Timeline,
+}
+----
+
+=== anv-ir
+
+Intermediate representation for optimization and codegen.
+
+[source,rust]
+----
+// IR is a timeline of scheduled events
+pub struct IrProgram {
+    pub metadata: Metadata,
+    pub timeline: Vec<IrEvent>,
+    pub skaters: Vec<SkaterId>,
+}
+
+pub struct IrEvent {
+    pub time: TimeRange,
+    pub skater: SkaterId,
+    pub element: IrElement,
+    pub path: IrPath,
+}
+
+pub enum IrElement {
+    Jump { kind: JumpKind, rotations: u8, entry: Edge, exit: Edge },
+    Spin { positions: Vec<SpinPosition>, level: Level, revolutions: u32 },
+    Step { steps: Vec<StepKind>, level: Level },
+    Transition { from: Position, to: Position, edge: Edge },
+}
+
+pub struct IrPath {
+    pub segments: Vec<PathSegment>,
+}
+
+pub enum PathSegment {
+    Line { start: Position, end: Position },
+    Arc { center: Position, radius: f64, start_angle: f64, end_angle: f64 },
+    Bezier { control_points: Vec<Position> },
+}
+----
+
+=== anv-codegen
+
+Code generation to bytecode or WASM.
+
+[source,rust]
+----
+// Bytecode
+pub enum Opcode {
+    // Stack
+    Push(Value), Pop, Dup,
+    // Arithmetic
+    Add, Sub, Mul, Div,
+    // Control
+    Jump(usize), JumpIf(usize), Call(usize), Return,
+    // Elements
+    ScheduleJump { kind: u8, rotations: u8 },
+    ScheduleSpin { kind: u8, level: u8 },
+    ScheduleStep { kind: u8, level: u8 },
+    // Temporal
+    AdvanceTime(f64), SyncBeat(u32, u32),
+    // Spatial
+    SetPosition(f64, f64), FollowPath(PathId),
+}
+
+pub struct Bytecode {
+    pub constants: Vec<Value>,
+    pub instructions: Vec<Opcode>,
+    pub paths: Vec<IrPath>,
+    pub metadata: Metadata,
+}
+
+// Codegen
+pub struct CodeGenerator {
+    bytecode: Bytecode,
+}
+
+impl CodeGenerator {
+    pub fn generate(&mut self, ir: &IrProgram) -> Bytecode;
+    pub fn to_wasm(&self) -> Vec<u8>;
+}
+----
+
+**Key crates:**
+- `wasm-encoder` - WASM binary generation
+- `walrus` - WASM transformation (alternative)
+
+=== anv-runtime
+
+Bytecode interpreter and execution engine.
+
+[source,rust]
+----
+pub struct Runtime {
+    pub state: ProgramState,
+    pub physics: PhysicsEngine,
+    pub spatial: SpatialEngine,
+    pub temporal: TemporalEngine,
+}
+
+pub struct ProgramState {
+    pub skaters: Vec<SkaterState>,
+    pub current_time: f64,
+    pub timeline: Vec<ScheduledEvent>,
+}
+
+pub struct SkaterState {
+    pub position: Position3,
+    pub velocity: Vec3,
+    pub orientation: f64,
+    pub edge: Edge,
+    pub current_element: Option<ElementExecution>,
+}
+
+impl Runtime {
+    pub fn new(bytecode: &Bytecode) -> Self;
+    pub fn step(&mut self, dt: f64) -> StepResult;
+    pub fn run_to_completion(&mut self) -> ExecutionResult;
+    pub fn get_frame(&self, time: f64) -> Frame;
+}
+
+pub struct Frame {
+    pub time: f64,
+    pub skaters: Vec<SkaterFrame>,
+    pub active_elements: Vec<ElementId>,
+}
+----
+
+=== anv-physics
+
+Physics simulation for validation and animation.
+
+[source,rust]
+----
+pub struct PhysicsEngine {
+    pub config: PhysicsConfig,
+}
+
+pub struct PhysicsConfig {
+    pub gravity: f64,           // 9.81 m/s²
+    pub ice_friction: f64,      // ~0.005
+    pub air_drag: f64,          // ~0.5
+    pub max_speed: f64,         // ~10 m/s
+}
+
+impl PhysicsEngine {
+    // Jump physics
+    pub fn calculate_jump_trajectory(&self, jump: &Jump, entry_state: &SkaterState) -> JumpTrajectory;
+    pub fn validate_jump_feasibility(&self, jump: &Jump, entry_state: &SkaterState) -> FeasibilityResult;
+
+    // Spin physics
+    pub fn calculate_spin_dynamics(&self, spin: &Spin, entry_state: &SkaterState) -> SpinDynamics;
+
+    // Motion
+    pub fn integrate(&self, state: &mut SkaterState, forces: &Forces, dt: f64);
+    pub fn apply_edge_dynamics(&self, state: &mut SkaterState, edge: Edge, dt: f64);
+}
+
+pub struct JumpTrajectory {
+    pub takeoff_velocity: Vec3,
+    pub flight_time: f64,
+    pub max_height: f64,
+    pub landing_position: Position,
+    pub rotation_rate: f64,
+}
+----
+
+**Key crates:**
+- `nalgebra` - Linear algebra
+- `rapier2d` / `rapier3d` - Physics (optional, for complex simulation)
+
+=== anv-spatial
+
+Geometry, paths, and collision detection.
+
+[source,rust]
+----
+pub struct Rink {
+    pub length: f64,  // 60m
+    pub width: f64,   // 30m
+    pub corner_radius: f64,  // 8.5m
+}
+
+impl Rink {
+    pub fn contains(&self, pos: Position) -> bool;
+    pub fn distance_to_boundary(&self, pos: Position) -> f64;
+    pub fn zone(&self, pos: Position) -> Zone;
+}
+
+pub struct SpatialEngine {
+    pub rink: Rink,
+}
+
+impl SpatialEngine {
+    // Path operations
+    pub fn validate_path(&self, path: &Path) -> ValidationResult;
+    pub fn path_length(&self, path: &Path) -> f64;
+    pub fn sample_path(&self, path: &Path, t: f64) -> (Position, Edge);
+
+    // Collision
+    pub fn check_collision(&self, pos1: Position, pos2: Position, radius: f64) -> bool;
+    pub fn find_collision_time(&self, traj1: &Trajectory, traj2: &Trajectory) -> Option<f64>;
+
+    // Path planning
+    pub fn find_transition_path(&self, from: Position, to: Position, constraints: &PathConstraints) -> Option<Path>;
+}
+----
+
+**Key crates:**
+- `geo` - Geometric types and algorithms
+- `parry2d` - Collision detection
+
+=== anv-temporal
+
+Timing, scheduling, and music synchronization.
+
+[source,rust]
+----
+pub struct TemporalEngine {
+    pub tempo: f64,  // BPM
+    pub time_signature: (u32, u32),
+    pub beats: Vec<Beat>,
+}
+
+impl TemporalEngine {
+    // Time conversion
+    pub fn beat_to_time(&self, measure: u32, beat: u32) -> f64;
+    pub fn time_to_beat(&self, time: f64) -> (u32, u32);
+
+    // Scheduling
+    pub fn schedule(&mut self, event: Event, time: TimeSpec) -> Result<(), ScheduleError>;
+    pub fn check_conflicts(&self) -> Vec<Conflict>;
+    pub fn resolve_schedule(&mut self) -> Result<Timeline, ScheduleError>;
+}
+
+pub enum TimeSpec {
+    Absolute(f64),
+    Beat(u32, u32),
+    After(EventId, f64),
+    Sync(EventId),
+}
+
+pub struct Timeline {
+    pub events: Vec<ScheduledEvent>,
+    pub duration: f64,
+}
+----
+
+**Key crates:**
+- `symphonia` - Audio decoding (for beat detection)
+
+=== anv-viz
+
+Visualization engine for 2D/3D rendering.
+
+[source,rust]
+----
+pub struct Visualizer {
+    pub renderer: Renderer,
+    pub camera: Camera,
+}
+
+pub enum Renderer {
+    Svg(SvgRenderer),
+    Canvas2D(Canvas2DRenderer),
+    WebGL(WebGLRenderer),
+}
+
+impl Visualizer {
+    // 2D
+    pub fn render_rink_diagram(&self, frame: &Frame) -> SvgDocument;
+    pub fn render_path_trace(&self, timeline: &Timeline) -> SvgDocument;
+
+    // Timeline
+    pub fn render_timing_chart(&self, timeline: &Timeline, music: Option<&AudioData>) -> SvgDocument;
+
+    // 3D
+    pub fn render_3d_frame(&self, frame: &Frame) -> Scene;
+
+    // Animation
+    pub fn export_animation(&self, timeline: &Timeline, format: ExportFormat) -> Vec<u8>;
+}
+
+pub enum ExportFormat {
+    Gif,
+    Mp4,
+    WebM,
+    Svg,
+    Pdf,
+}
+----
+
+**Key crates:**
+- `svg` - SVG generation
+- `wgpu` - WebGPU for 3D
+- `resvg` - SVG rendering to raster
+
+=== anv-lsp
+
+Language Server Protocol implementation.
+
+[source,rust]
+----
+pub struct AnvLanguageServer {
+    pub documents: HashMap<Url, Document>,
+    pub analyzer: SemanticAnalyzer,
+}
+
+impl LanguageServer for AnvLanguageServer {
+    async fn initialize(&self, params: InitializeParams) -> Result<InitializeResult>;
+    async fn completion(&self, params: CompletionParams) -> Result<Option<CompletionResponse>>;
+    async fn hover(&self, params: HoverParams) -> Result<Option<Hover>>;
+    async fn goto_definition(&self, params: GotoDefinitionParams) -> Result<Option<GotoDefinitionResponse>>;
+    async fn references(&self, params: ReferenceParams) -> Result<Option<Vec<Location>>>;
+    async fn document_symbol(&self, params: DocumentSymbolParams) -> Result<Option<DocumentSymbolResponse>>;
+    async fn semantic_tokens_full(&self, params: SemanticTokensParams) -> Result<Option<SemanticTokensResult>>;
+    async fn code_action(&self, params: CodeActionParams) -> Result<Option<CodeActionResponse>>;
+    async fn formatting(&self, params: DocumentFormattingParams) -> Result<Option<Vec<TextEdit>>>;
+}
+
+// Domain-specific completions
+impl AnvLanguageServer {
+    fn complete_element(&self, context: &CompletionContext) -> Vec<CompletionItem>;
+    fn complete_edge(&self, context: &CompletionContext) -> Vec<CompletionItem>;
+    fn complete_modifier(&self, context: &CompletionContext) -> Vec<CompletionItem>;
+}
+----
+
+**Key crates:**
+- `tower-lsp` - LSP server framework
+- `lsp-types` - LSP type definitions
+
+=== anv-cli
+
+Command-line interface.
+
+[source,rust]
+----
+#[derive(Parser)]
+#[command(name = "anv", about = "Anvomidav choreography language")]
+pub enum Cli {
+    /// Compile a program
+    Build {
+        #[arg(short, long)]
+        input: PathBuf,
+        #[arg(short, long)]
+        output: Option<PathBuf>,
+        #[arg(long)]
+        target: Target,
+    },
+    /// Check a program without compiling
+    Check {
+        #[arg(short, long)]
+        input: PathBuf,
+    },
+    /// Run a program
+    Run {
+        #[arg(short, long)]
+        input: PathBuf,
+    },
+    /// Start the language server
+    Lsp,
+    /// Format source code
+    Fmt {
+        #[arg(short, long)]
+        input: PathBuf,
+        #[arg(long)]
+        check: bool,
+    },
+    /// Generate visualization
+    Viz {
+        #[arg(short, long)]
+        input: PathBuf,
+        #[arg(short, long)]
+        output: PathBuf,
+        #[arg(long)]
+        format: VizFormat,
+    },
+    /// Initialize a new project
+    Init {
+        #[arg(short, long)]
+        name: String,
+    },
+    /// Package management
+    Pkg(PkgCommand),
+}
+----
+
+**Key crates:**
+- `clap` - Argument parsing
+- `indicatif` - Progress bars
+- `miette` - Pretty error output
+
+=== anv-fmt
+
+Code formatter.
+
+[source,rust]
+----
+pub struct Formatter {
+    pub config: FormatConfig,
+}
+
+pub struct FormatConfig {
+    pub indent_width: usize,
+    pub max_line_width: usize,
+    pub element_style: ElementStyle,
+    pub brace_style: BraceStyle,
+}
+
+impl Formatter {
+    pub fn format(&self, source: &str) -> Result<String, FormatError>;
+    pub fn format_ast(&self, ast: &Program) -> String;
+}
+----
+
+=== anv-pkg
+
+Package manager for choreographic patterns.
+
+[source,rust]
+----
+pub struct PackageManager {
+    pub registry: RegistryClient,
+    pub cache: PackageCache,
+}
+
+impl PackageManager {
+    pub async fn install(&self, package: &str) -> Result<(), PkgError>;
+    pub async fn publish(&self, path: &Path) -> Result<(), PkgError>;
+    pub async fn search(&self, query: &str) -> Result<Vec<PackageInfo>, PkgError>;
+    pub fn resolve(&self, deps: &[Dependency]) -> Result<LockFile, PkgError>;
+}
+
+pub struct Package {
+    pub name: String,
+    pub version: Version,
+    pub elements: Vec<ElementDef>,
+    pub patterns: Vec<PatternDef>,
+}
+----
+
+== Key Dependencies Summary
+
+[source,toml]
+----
+[workspace.dependencies]
+# Parsing
+logos = "0.13"
+chumsky = "0.9"
+rowan = "0.15"
+
+# Type system
+z3 = "0.12"
+ena = "0.14"
+
+# Math/Physics
+nalgebra = "0.32"
+geo = "0.26"
+parry2d = "0.13"
+
+# Visualization
+svg = "0.14"
+wgpu = "0.18"
+resvg = "0.36"
+
+# LSP
+tower-lsp = "0.20"
+lsp-types = "0.94"
+
+# CLI
+clap = { version = "4", features = ["derive"] }
+miette = { version = "5", features = ["fancy"] }
+indicatif = "0.17"
+
+# WASM
+wasm-bindgen = "0.2"
+wasm-encoder = "0.38"
+
+# Audio
+symphonia = "0.5"
+
+# Async
+tokio = { version = "1", features = ["full"] }
+
+# Serialization
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+# Testing
+proptest = "1"
+criterion = "0.5"
+insta = "1"
+----
+
+== Build Targets
+
+[source,toml]
+----
+# Native CLI
+[[bin]]
+name = "anv"
+path = "crates/anv-cli/src/main.rs"
+
+# WASM library (for web)
+[lib]
+name = "anvomidav_wasm"
+path = "crates/anv-wasm/src/lib.rs"
+crate-type = ["cdylib"]
+
+# C FFI (for mobile/embedding)
+[lib]
+name = "anvomidav"
+path = "crates/anv-ffi/src/lib.rs"
+crate-type = ["staticlib", "cdylib"]
+----
+
+== Development Phases
+
+=== Phase 1: Foundation (MVP)
+* [ ] anv-core: Domain types
+* [ ] anv-syntax: Lexer + parser (subset)
+* [ ] anv-types: Basic type checking (no refinements)
+* [ ] anv-cli: `check` command
+* [ ] Basic test suite
+
+=== Phase 2: Core Language
+* [ ] Full grammar implementation
+* [ ] Complete type system with inference
+* [ ] Refinement types + Z3 integration
+* [ ] anv-semantics: ISU rules (singles)
+* [ ] anv-ir: Timeline IR
+
+=== Phase 3: Execution
+* [ ] anv-codegen: Bytecode generation
+* [ ] anv-runtime: Interpreter
+* [ ] anv-temporal: Scheduling
+* [ ] anv-spatial: Path validation
+* [ ] anv-cli: `run` command
+
+=== Phase 4: Tooling
+* [ ] anv-lsp: Language server
+* [ ] anv-fmt: Formatter
+* [ ] tree-sitter grammar
+* [ ] VS Code extension
+* [ ] anv-cli: `fmt` command
+
+=== Phase 5: Visualization
+* [ ] anv-viz: 2D SVG rendering
+* [ ] Timing charts
+* [ ] anv-cli: `viz` command
+* [ ] PDF export
+
+=== Phase 6: Advanced
+* [ ] anv-physics: Simulation
+* [ ] 3D preview (WASM + WebGL)
+* [ ] anv-pkg: Package manager
+* [ ] Pairs/dance support
+* [ ] Music sync (beat detection)
+
+== Testing Strategy
+
+[source,rust]
+----
+// Unit tests per crate
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_parse_jump() { ... }
+
+    #[test]
+    fn test_type_check_combo() { ... }
+}
+
+// Property-based tests
+proptest! {
+    #[test]
+    fn parse_roundtrip(s in valid_program()) {
+        let ast = parse(&s).unwrap();
+        let formatted = format(&ast);
+        let ast2 = parse(&formatted).unwrap();
+        prop_assert_eq!(ast, ast2);
+    }
+}
+
+// Snapshot tests
+#[test]
+fn test_error_messages() {
+    let result = check("invalid program");
+    insta::assert_snapshot!(result.error_display());
+}
+
+// Integration tests in tests/
+#[test]
+fn test_full_pipeline() {
+    let source = include_str!("fixtures/short_program.anv");
+    let result = compile_and_run(source);
+    assert!(result.is_ok());
+}
+----
+
+== Error Handling
+
+Using `miette` for user-friendly diagnostics:
+
+[source,rust]
+----
+#[derive(Debug, Diagnostic, Error)]
+#[error("Type mismatch")]
+#[diagnostic(
+    code(anv::type::mismatch),
+    help("Expected {expected}, found {found}")
+)]
+pub struct TypeMismatch {
+    #[source_code]
+    pub src: NamedSource,
+    #[label("this expression")]
+    pub span: SourceSpan,
+    pub expected: String,
+    pub found: String,
+}
+----
+
+Output:
+[source]
+----
+error[anv::type::mismatch]: Type mismatch
+  ┌─ program.anv:15:5
+  │
+15│     triple lutz at "not a time";
+  │                    ^^^^^^^^^^^^^ this expression
+  │
+  = Expected time, found string
+  = help: Use a time literal like 0:30 or 1:15.5
+----
+
+== Next Steps
+
+1. Initialize Cargo workspace
+2. Implement anv-core with domain types
+3. Build lexer with logos
+4. Build parser with chumsky
+5. Add basic type checking
+6. Create CLI skeleton
+
+Ready to start coding?
