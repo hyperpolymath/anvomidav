@@ -1,0 +1,59 @@
+// Ice Dance Rhythm Dance - Championship Level
+//
+// Based on ISU Technical Requirements for Senior Ice Dance.
+// Duration: 2:50 (+/- 10 seconds)
+//
+// The Rhythm Dance combines compulsory patterns with
+// creative choreography set to a specified rhythm/theme.
+// For 2024-2025 season: Latin rhythms (Samba, Salsa, etc.)
+//
+// Required Elements:
+// - 1 pattern dance sequence (specified pattern)
+// - 1 pattern dance sequence or second pattern
+// - 1 dance spin or combination spin
+// - 1 set of twizzles
+// - 1 step sequence (not touching)
+
+program rhythm_dance_2025 {
+    segment rd: rhythm {
+        // Pattern Dance Sequence 1
+        // Midnight Blues pattern - required for season
+        // Keypoint timing and edge quality critical
+        sequence pattern_1 {
+            pattern midnight_blues section1
+        }
+
+        // Twizzle Sequence
+        // Synchronized rotational elements
+        // Minimum 3 rotations each, traveling across ice
+        sequence twizzles {
+            twizzle synchronized L4
+        }
+
+        // Pattern Dance Sequence 2
+        // Second section of required pattern
+        sequence pattern_2 {
+            pattern midnight_blues section2
+        }
+
+        // Dance Spin
+        // Combination spin with at least one change of position
+        // Partners maintain contact throughout
+        sequence dance_spin {
+            spin dance_combination L4
+        }
+
+        // Not-Touching Step Sequence
+        // Intricate footwork without partner contact
+        // Demonstrates individual skating skill
+        sequence step_sequence {
+            step serpentine L4
+        }
+
+        // Choreographic Element
+        // Optional artistic enhancement
+        sequence choreo_lift {
+            choreographic lift_brief
+        }
+    }
+}

@@ -1,0 +1,67 @@
+// Pairs Short Program - Championship Level
+//
+// Based on ISU Technical Requirements for Senior Pairs Short Program.
+// Duration: 2:40 (+/- 10 seconds)
+//
+// Required Elements (7 elements):
+// - 1 lift (Group 3, 4, or 5)
+// - 1 twist lift (double or triple)
+// - 1 throw jump (double or triple)
+// - 1 solo jump (double or triple Axel)
+// - 1 side-by-side jump (same type as solo)
+// - 1 pair spin combination (one change of foot minimum)
+// - 1 death spiral (any position)
+// - 1 step sequence
+
+program pairs_short_2025 {
+    segment sp: short {
+        // Opening Side-by-Side Triple Salchow
+        // Both skaters execute identical jumps in unison
+        sequence side_by_side_jump {
+            jump triple salchow
+        }
+
+        // Pair Spin Combination
+        // Change of foot with multiple positions
+        sequence pair_spin {
+            spin camel sit upright L4
+        }
+
+        // Triple Twist Lift
+        // Man throws lady into rotations, catches at waist
+        // Maximum difficulty with split position
+        sequence twist {
+            twist triple split
+        }
+
+        // Group 5 Lift
+        // Hand-to-hand press lift with full extension
+        sequence lift {
+            lift hand_to_hand group5 L4
+        }
+
+        // Throw Triple Flip
+        // Man assists lady's jump, she lands independently
+        sequence throw_jump {
+            throw triple flip
+        }
+
+        // Solo Jump - Triple Salchow
+        // Same type as side-by-side for required element
+        sequence solo_jump {
+            jump triple salchow
+        }
+
+        // Death Spiral
+        // Back inside position - classic and elegant
+        sequence death_spiral {
+            death_spiral back_inside L4
+        }
+
+        // Step Sequence
+        // Synchronized footwork covering full ice
+        sequence footwork {
+            step diagonal L4
+        }
+    }
+}
