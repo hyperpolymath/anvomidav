@@ -110,6 +110,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "anv-semantics"
+version = "0.1.0"
+dependencies = [
+ "anv-core",
+ "anv-syntax",
+ "pretty_assertions",
+ "thiserror",
+]
+
+[[package]]
 name = "anv-syntax"
 version = "0.1.0"
 dependencies = [

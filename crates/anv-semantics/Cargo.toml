@@ -1,0 +1,20 @@
+# SPDX-FileCopyrightText: 2025 hyperpolymath
+# SPDX-License-Identifier: MIT OR AGPL-3.0-or-later
+
+[package]
+name = "anv-semantics"
+version = "0.1.0"
+edition = "2021"
+description = "Semantic analysis and ISU rules validation for Anvomidav"
+license = "MIT OR AGPL-3.0-or-later"
+repository = "https://github.com/hyperpolymath/anvomidav"
+keywords = ["figure-skating", "dsl", "validation", "isu-rules"]
+categories = ["compilers"]
+
+[dependencies]
+anv-core = { workspace = true }
+anv-syntax = { workspace = true }
+thiserror = { workspace = true }
+
+[dev-dependencies]
+pretty_assertions = "1.4"
