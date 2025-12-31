@@ -1,0 +1,464 @@
+// SPDX-FileCopyrightText: 2025 hyperpolymath
+// SPDX-License-Identifier: MIT OR AGPL-3.0-or-later
+
+= Formal Verification Methodology
+:toc: macro
+:toc-title: Contents
+:toclevels: 4
+:sectnums:
+:stem: latexmath
+
+== Abstract
+
+This document presents the formal verification methodology for Anvomidav, encompassing theorem proving, model checking, abstract interpretation, and runtime verification approaches. We establish the verification objectives, specify the proof obligations, and outline mechanized verification strategies using proof assistants. The goal is to provide certified guarantees about program correctness, ISU compliance, and safety properties.
+
+toc::[]
+
+== 1. Verification Objectives
+
+=== 1.1 Property Categories
+
+**Definition 1.1** (Verification Properties):
+[stem]
+++++
+\begin{align}
+\mathsf{Safety} &: \text{Nothing bad happens} \\
+\mathsf{Liveness} &: \text{Something good eventually happens} \\
+\mathsf{Compliance} &: \text{ISU rules are satisfied} \\
+\mathsf{Feasibility} &: \text{Choreography is physically executable}
+\end{align}
+++++
+
+=== 1.2 Specific Verification Goals
+
+1. **Type Soundness**: Well-typed programs don't get stuck
+2. **ISU Compliance**: All required elements present, all rules satisfied
+3. **Temporal Validity**: No temporal conflicts, proper sequencing
+4. **Spatial Safety**: No collisions, paths within rink
+5. **Physical Feasibility**: Biomechanically possible execution
+6. **Compiler Correctness**: Compilation preserves semantics
+
+=== 1.3 Assurance Levels
+
+**Definition 1.2** (Assurance Hierarchy):
+[stem]
+++++
+\begin{align}
+\text{Level 0} &: \text{Informal reasoning} \\
+\text{Level 1} &: \text{Testing} \\
+\text{Level 2} &: \text{Static analysis} \\
+\text{Level 3} &: \text{Model checking} \\
+\text{Level 4} &: \text{Theorem proving (paper proofs)} \\
+\text{Level 5} &: \text{Machine-checked proofs}
+\end{align}
+++++
+
+Target: Level 5 for core semantics, Level 3-4 for domain rules.
+
+== 2. Theorem Proving
+
+=== 2.1 Proof Assistant Selection
+
+**Candidate Systems**:
+
+[cols="2,2,3"]
+|===
+|System |Language |Strengths
+
+|Coq |Gallina |Mature, extensive libraries, extraction
+|Lean 4 |Lean |Modern, fast, mathematical focus
+|Agda |Agda |Dependent types, good for PLT
+|Isabelle/HOL |Isar |Automation, large theory libraries
+|F* |F* |Verified effectful programs
+|===
+
+**Recommendation**: Lean 4 for primary development, Coq for extracted implementations.
+
+=== 2.2 Formalization Structure
+
+**Definition 2.1** (Formalization Modules):
+[stem]
+++++
+\begin{align}
+\mathsf{Syntax} &: \text{AST definition} \\
+\mathsf{Typing} &: \text{Type system rules} \\
+\mathsf{Semantics} &: \text{Operational semantics} \\
+\mathsf{TypeSoundness} &: \text{Progress \& Preservation proofs} \\
+\mathsf{ISURules} &: \text{Encoded ISU regulations} \\
+\mathsf{Spatial} &: \text{Geometry library} \\
+\mathsf{Temporal} &: \text{Time and scheduling} \\
+\mathsf{Compiler} &: \text{Compilation correctness}
+\end{align}
+++++
+
+=== 2.3 Key Theorems
+
+**Theorem 2.1** (Type Soundness):
+[source,lean]
+----
+theorem type_soundness :
+  ∀ (e : Expr) (τ : Type),
+    (∅ ⊢ e : τ) →
+    (∃ v, e ⟶* v ∧ is_value v) ∨ (∀ n, ∃ e', e ⟶^n e')
+----
+
+**Theorem 2.2** (ISU Compliance):
+[source,lean]
+----
+theorem isu_compliance :
+  ∀ (p : Program),
+    well_formed p →
+    ∀ (rule : ISU_Rule), satisfies p rule
+----
+
+**Theorem 2.3** (Temporal Consistency):
+[source,lean]
+----
+theorem temporal_consistency :
+  ∀ (c : Choreography),
+    well_typed c →
+    ∀ (t : Time), consistent (schedule c t)
+----
+
+=== 2.4 Proof Techniques
+
+**Technique 2.1** (Structural Induction): For AST-indexed properties.
+
+**Technique 2.2** (Rule Induction): For derivation-indexed properties.
+
+**Technique 2.3** (Well-Founded Induction): For termination proofs.
+
+**Technique 2.4** (Coinduction): For infinite behaviors (streaming, real-time).
+
+=== 2.5 Proof Automation
+
+**Definition 2.2** (Automation Levels):
+[stem]
+++++
+\begin{align}
+\texttt{simp} &: \text{Simplification tactics} \\
+\texttt{auto} &: \text{Automated proof search} \\
+\texttt{omega} &: \text{Linear arithmetic} \\
+\texttt{smt} &: \text{SMT solver integration} \\
+\texttt{decide} &: \text{Decision procedures}
+\end{align}
+++++
+
+== 3. Model Checking
+
+=== 3.1 Model Construction
+
+**Definition 3.1** (Transition System): stem:[\mathcal{M} = (S, S_0, R, L)]
+
+- stem:[S]: State space (configurations)
+- stem:[S_0 \subseteq S]: Initial states
+- stem:[R \subseteq S \times S]: Transition relation
+- stem:[L : S \to 2^{AP}]: Labeling function
+
+=== 3.2 Property Specification
+
+**Temporal Logic Formulas**:
+
+**Safety**: stem:[\mathbf{G} \neg \mathsf{collision}]
+**Liveness**: stem:[\mathbf{G}(\mathsf{started}(e) \implies \mathbf{F} \mathsf{completed}(e))]
+**Fairness**: stem:[\mathbf{GF} \mathsf{scheduled}(e) \implies \mathbf{GF} \mathsf{executed}(e)]
+
+=== 3.3 State Space Reduction
+
+**Technique 3.1** (Symmetry Reduction): Exploit skater equivalence:
+[stem]
+++++
+\mathsf{state}(S_1, S_2) \sim \mathsf{state}(S_2, S_1) \quad \text{(unordered pairs)}
+++++
+
+**Technique 3.2** (Abstraction): Abstract continuous values:
+[stem]
+++++
+\mathsf{position} : \mathbb{R}^2 \to \{\mathsf{zone}_1, \ldots, \mathsf{zone}_n\}
+++++
+
+**Technique 3.3** (Partial Order Reduction): Exploit independent transitions.
+
+=== 3.4 Bounded Model Checking
+
+**Definition 3.2** (BMC Problem):
+[stem]
+++++
+\mathcal{M}, s_0 \models_k \phi \stackrel{\text{def}}{=} \exists \pi \in \mathsf{Paths}_k(s_0).\ \pi \models \phi
+++++
+
+Encode as SAT/SMT query for depth stem:[k].
+
+**Application**: Verify bounded choreographies (fixed number of elements).
+
+=== 3.5 Tool Integration
+
+**UPPAAL**: Timed automata model checking
+[source]
+----
+// Element execution automaton
+process Element(id) {
+    state approach, execute, complete;
+    clock x;
+
+    approach -> execute { guard x >= entry_time[id]; reset x; }
+    execute -> complete { guard x >= duration[id]; }
+}
+----
+
+**SPIN**: LTL model checking for choreographic protocols
+
+**nuXmv**: Symbolic model checking with real arithmetic
+
+== 4. Abstract Interpretation
+
+=== 4.1 Abstract Domains
+
+**Definition 4.1** (Abstract Domain): stem:[(D^\#, \sqsubseteq, \sqcup, \sqcap, \gamma, \alpha)]
+
+- stem:[D^\#]: Abstract elements
+- stem:[\sqsubseteq]: Partial order
+- stem:[\sqcup, \sqcap]: Join and meet
+- stem:[\gamma : D^\# \to \mathcal{P}(D)]: Concretization
+- stem:[\alpha : \mathcal{P}(D) \to D^\#]: Abstraction
+
+=== 4.2 Galois Connections
+
+**Definition 4.2** (Galois Connection):
+[stem]
+++++
+(\mathcal{P}(D), \subseteq) \galmark{\alpha}{\gamma} (D^\#, \sqsubseteq)
+++++
+
+satisfying stem:[\alpha(S) \sqsubseteq d^\# \iff S \subseteq \gamma(d^\#)].
+
+=== 4.3 Domain-Specific Abstract Domains
+
+**Definition 4.3** (Temporal Interval Domain):
+[stem]
+++++
+\mathsf{Time}^\# = \{[t_1, t_2] \mid t_1, t_2 \in \mathbb{Q}_{\geq 0}\} \cup \{\bot, \top\}
+++++
+
+**Definition 4.4** (Spatial Zone Domain):
+[stem]
+++++
+\mathsf{Pos}^\# = \mathcal{P}(\{\mathsf{zone}_1, \ldots, \mathsf{zone}_n\})
+++++
+
+**Definition 4.5** (Edge Transition Domain):
+[stem]
+++++
+\mathsf{Edge}^\# = \mathcal{P}(\mathsf{Edge} \times \mathsf{Edge})
+++++
+
+=== 4.4 Static Analysis
+
+**Analysis 4.1** (Temporal Conflict Detection):
+[source,pseudocode]
+----
+function analyze_temporal(program):
+    for each element e1, e2:
+        interval1 = abstract_time(e1)
+        interval2 = abstract_time(e2)
+        if overlap(interval1, interval2) and same_skater(e1, e2):
+            report_potential_conflict(e1, e2)
+----
+
+**Analysis 4.2** (Spatial Reachability):
+[source,pseudocode]
+----
+function analyze_spatial(sequence):
+    pos = initial_position
+    for each element in sequence:
+        required_pos = entry_position(element)
+        if not reachable(pos, required_pos, available_time):
+            report_unreachable(element)
+        pos = exit_position(element)
+----
+
+=== 4.5 Widening and Narrowing
+
+**Definition 4.5** (Widening): Ensures termination:
+[stem]
+++++
+d_1 \nabla d_2 \sqsupseteq d_1 \sqcup d_2
+++++
+
+with finite ascending chains.
+
+**Definition 4.6** (Narrowing): Improves precision:
+[stem]
+++++
+d_1 \sqsupseteq d_1 \triangle d_2 \sqsupseteq d_2
+++++
+
+== 5. Runtime Verification
+
+=== 5.1 Monitor Synthesis
+
+**Definition 5.1** (Monitor): stem:[\mathcal{O} : \Sigma^* \to \{\top, \bot, ?\}]
+
+- stem:[\top]: Property satisfied
+- stem:[\bot]: Property violated
+- stem:[?]: Inconclusive (need more events)
+
+=== 5.2 Monitorable Properties
+
+**Theorem 5.1** (Monitorability): A property stem:[\phi] is monitorable iff:
+[stem]
+++++
+\forall u \in \Sigma^*.\ (\exists v.\ uv \models \phi) \land (\exists w.\ uw \not\models \phi)
+++++
+
+**Example 5.1** (Monitorable ISU Properties):
+- Element count limits
+- Time bounds
+- Jump repetition rules
+
+**Example 5.2** (Non-Monitorable):
+- "Eventually terminates" (liveness)
+
+=== 5.3 Online Monitoring
+
+**Definition 5.2** (Three-Valued Semantics):
+[stem]
+++++
+[\sigma \models \phi]_i =
+\begin{cases}
+\top & \text{if } \forall \sigma'.\ \sigma[0..i] \cdot \sigma' \models \phi \\
+\bot & \text{if } \forall \sigma'.\ \sigma[0..i] \cdot \sigma' \not\models \phi \\
+? & \text{otherwise}
+\end{cases}
+++++
+
+=== 5.4 Instrumentation
+
+**Definition 5.3** (Instrumented Execution):
+[stem]
+++++
+\mathcal{E}' = \mathcal{E} \otimes \mathcal{O}
+++++
+
+Execution produces events for monitoring.
+
+== 6. Refinement Types Verification
+
+=== 6.1 Liquid Types
+
+**Definition 6.1** (Liquid Type):
+[stem]
+++++
+\{x : B \mid p\}
+++++
+
+where stem:[p] is in quantifier-free logic.
+
+=== 6.2 Verification Conditions
+
+**Definition 6.2** (VC Generation):
+[stem]
+++++
+\mathsf{VC}(\Gamma \vdash e : \{x:B \mid p\}) = \bigwedge_{(y : \{z:B' \mid q\}) \in \Gamma} q[y/z] \implies p[e/x]
+++++
+
+=== 6.3 SMT Integration
+
+**Solver**: Z3, CVC5 for VC discharge.
+
+**Theory Combination**: QF_LIA + QF_LRA + Arrays + Uninterpreted Functions
+
+== 7. Certified Compilation
+
+=== 7.1 Compiler Correctness
+
+**Theorem 7.1** (Semantic Preservation):
+[stem]
+++++
+\forall e, v.\ e \Downarrow v \iff \mathsf{compile}(e) \Downarrow_{\text{target}} \mathsf{encode}(v)
+++++
+
+=== 7.2 Translation Validation
+
+**Definition 7.1** (Validator):
+[stem]
+++++
+\mathsf{validate} : \mathsf{Source} \times \mathsf{Target} \to \{\mathsf{Accept}, \mathsf{Reject}\}
+++++
+
+such that stem:[\mathsf{validate}(s, t) = \mathsf{Accept} \implies s \sim t].
+
+=== 7.3 Proof-Carrying Code
+
+**Definition 7.2** (PCC):
+[stem]
+++++
+\langle \mathsf{code}, \mathsf{proof} \rangle
+++++
+
+The proof certifies that code satisfies safety policy.
+
+== 8. Verification Workflow
+
+=== 8.1 Development Process
+
+[source,mermaid]
+----
+flowchart TD
+    A[Write Choreography] --> B[Type Check]
+    B --> C{Type Errors?}
+    C -->|Yes| A
+    C -->|No| D[Static Analysis]
+    D --> E{Warnings?}
+    E -->|Yes| A
+    E -->|No| F[Compile]
+    F --> G[Runtime Monitor]
+    G --> H[Execute]
+----
+
+=== 8.2 Verification Phases
+
+1. **Parsing**: Syntax correctness
+2. **Type Checking**: Type soundness
+3. **Refinement Checking**: SMT-based verification
+4. **Static Analysis**: Abstract interpretation
+5. **Model Checking**: Temporal properties (optional, for complex programs)
+6. **Runtime Monitoring**: Dynamic verification
+
+=== 8.3 Incremental Verification
+
+**Definition 8.1** (Modular Verification):
+[stem]
+++++
+\mathsf{verify}(M_1 \cup M_2) = \mathsf{verify}(M_1) \land \mathsf{verify}(M_2) \land \mathsf{verify\_interface}(M_1, M_2)
+++++
+
+== 9. TODO: Incomplete Specifications
+
+[WARNING]
+====
+The following verification aspects require further development:
+
+* [ ] **§2** - Complete Lean 4 formalization of core semantics
+* [ ] **§3** - UPPAAL models for element automata
+* [ ] **§4** - Complete abstract domain specifications
+* [ ] **§5** - Monitor synthesis algorithm
+* [ ] **§6** - Full liquid type inference
+* [ ] **§7** - CompCert-style certified compiler
+* [ ] **§10** - Verification of physics simulation
+* [ ] **§11** - Certified code extraction
+====
+
+== 10. References
+
+1. Nipkow, T., Paulson, L. C., & Wenzel, M. _Isabelle/HOL: A Proof Assistant for Higher-Order Logic_. Springer, 2002.
+2. Chlipala, A. _Certified Programming with Dependent Types_. MIT Press, 2013.
+3. Baier, C. & Katoen, J. P. _Principles of Model Checking_. MIT Press, 2008.
+4. Cousot, P. & Cousot, R. "Abstract Interpretation: A Unified Lattice Model." _POPL_, 1977.
+5. Leroy, X. "Formal Verification of a Realistic Compiler." _CACM_, 52(7), 2009.
+6. Rondon, P. M., Kawaguchi, M., & Jhala, R. "Liquid Types." _PLDI_, 2008.
+
+---
+
+_Document Version: 0.1.0-draft_
+_Last Updated: 2025-01-01_

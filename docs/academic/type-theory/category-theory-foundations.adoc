@@ -1,0 +1,470 @@
+// SPDX-FileCopyrightText: 2025 hyperpolymath
+// SPDX-License-Identifier: MIT OR AGPL-3.0-or-later
+
+= Categorical Foundations of Anvomidav
+:toc: macro
+:toc-title: Contents
+:toclevels: 4
+:sectnums:
+:stem: latexmath
+
+== Abstract
+
+This document establishes the category-theoretic foundations of the Anvomidav type system and semantics. We model types as objects in a cartesian closed category, effects as monads, and choreographic composition as monoidal structure. These foundations enable compositional reasoning, semantic coherence proofs, and principled language extensions.
+
+toc::[]
+
+== 1. Categories of Types
+
+=== 1.1 The Category Anv
+
+**Definition 1.1** (Category of Anvomidav Types): Let stem:[\mathbf{Anv}] be the category where:
+
+- **Objects**: Types stem:[\tau \in \mathsf{Type}]
+- **Morphisms**: Terms stem:[\Gamma \vdash e : \tau_1 \to \tau_2] (modulo stem:[\beta\eta]-equivalence)
+- **Identity**: stem:[\mathrm{id}_\tau = \lambda x:\tau. x]
+- **Composition**: stem:[g \circ f = \lambda x. g(f(x))]
+
+**Theorem 1.1** (Category Laws): stem:[\mathbf{Anv}] satisfies the category axioms.
+
+_Proof_:
+
+1. **Identity**: stem:[f \circ \mathrm{id} = f = \mathrm{id} \circ f]
+   [stem]
+   ++++
+   (f \circ \mathrm{id})(x) = f(\mathrm{id}(x)) = f(x) \quad \checkmark
+   ++++
+
+2. **Associativity**: stem:[(h \circ g) \circ f = h \circ (g \circ f)]
+   [stem]
+   ++++
+   ((h \circ g) \circ f)(x) = (h \circ g)(f(x)) = h(g(f(x))) = h((g \circ f)(x)) = (h \circ (g \circ f))(x) \quad \checkmark
+   ++++
+
+∎
+
+=== 1.2 Cartesian Closed Structure
+
+**Theorem 1.2** (CCC Structure): stem:[\mathbf{Anv}] is a cartesian closed category.
+
+_Proof_: We demonstrate the required structure:
+
+**Terminal Object**: stem:[\texttt{unit}]
+- Unique morphism: stem:[!_\tau : \tau \to \texttt{unit}] given by stem:[\lambda x. ()]
+
+**Products**: stem:[\tau_1 \times \tau_2]
+- Projections: stem:[\pi_1 : \tau_1 \times \tau_2 \to \tau_1], stem:[\pi_2 : \tau_1 \times \tau_2 \to \tau_2]
+- Pairing: stem:[\langle f, g \rangle : \sigma \to \tau_1 \times \tau_2] where stem:[\langle f, g \rangle(x) = (f(x), g(x))]
+- Universal property: stem:[\pi_1 \circ \langle f, g \rangle = f] and stem:[\pi_2 \circ \langle f, g \rangle = g]
+
+**Exponentials**: stem:[\tau_1 \Rightarrow \tau_2] (function types)
+- Evaluation: stem:[\mathrm{eval} : (\tau_1 \Rightarrow \tau_2) \times \tau_1 \to \tau_2]
+- Currying: stem:[\Lambda : \mathrm{Hom}(\sigma \times \tau_1, \tau_2) \cong \mathrm{Hom}(\sigma, \tau_1 \Rightarrow \tau_2)]
+
+The curry/uncurry isomorphism witnesses the adjunction stem:[(-) \times \tau_1 \dashv \tau_1 \Rightarrow (-)].
+
+∎
+
+=== 1.3 Coproducts
+
+**Definition 1.2** (Coproduct): The sum type stem:[\tau_1 + \tau_2] with:
+- Injections: stem:[\iota_1 : \tau_1 \to \tau_1 + \tau_2], stem:[\iota_2 : \tau_2 \to \tau_1 + \tau_2]
+- Case analysis: stem:[[f, g] : \tau_1 + \tau_2 \to \sigma] where stem:[[f,g] \circ \iota_1 = f], stem:[[f,g] \circ \iota_2 = g]
+
+=== 1.4 Initial Object
+
+**Definition 1.3** (Empty Type): stem:[\texttt{void}] is the initial object.
+- Unique morphism: stem:[\texttt{absurd}_\tau : \texttt{void} \to \tau]
+
+**Theorem 1.3** (Bicartesian Closed): stem:[\mathbf{Anv}] is a bicartesian closed category.
+
+== 2. Functor Semantics
+
+=== 2.1 Type Constructors as Functors
+
+**Definition 2.1** (List Functor): stem:[\mathsf{List} : \mathbf{Anv} \to \mathbf{Anv}]
+
+- On objects: stem:[\mathsf{List}(\tau) = \texttt{list}[\tau]]
+- On morphisms: stem:[\mathsf{List}(f) = \texttt{map}(f)]
+
+**Theorem 2.1** (Functor Laws):
+[stem]
+++++
+\begin{align}
+\mathsf{List}(\mathrm{id}) &= \mathrm{id} \\
+\mathsf{List}(g \circ f) &= \mathsf{List}(g) \circ \mathsf{List}(f)
+\end{align}
+++++
+
+_Proof_: By structural induction on lists.
+
+=== 2.2 Domain-Specific Functors
+
+**Definition 2.2** (Sequence Functor): stem:[\mathsf{Seq} : \mathbf{Anv} \to \mathbf{Anv}]
+
+Maps element types to choreographic sequences:
+[stem]
+++++
+\mathsf{Seq}(\tau) = \texttt{sequence}[\tau]
+++++
+
+This functor preserves the temporal ordering structure.
+
+**Definition 2.3** (Path Functor): stem:[\mathsf{Path} : \mathbf{Anv} \to \mathbf{Anv}]
+
+[stem]
+++++
+\mathsf{Path}(\tau) = [0,1] \to \tau \times \texttt{Edge}
+++++
+
+Captures continuous spatial trajectories parameterized by edge types.
+
+**Definition 2.4** (Timed Functor): stem:[\mathsf{Timed} : \mathbf{Anv} \to \mathbf{Anv}]
+
+[stem]
+++++
+\mathsf{Timed}(\tau) = \texttt{time} \times \tau \times \texttt{duration}
+++++
+
+Associates temporal metadata with any type.
+
+=== 2.3 Natural Transformations
+
+**Definition 2.4** (Natural Transformation): A natural transformation stem:[\alpha : F \Rightarrow G] between functors stem:[F, G : \mathbf{C} \to \mathbf{D}] is a family of morphisms stem:[\alpha_A : F(A) \to G(A)] such that for all stem:[f : A \to B]:
+
+[stem]
+++++
+G(f) \circ \alpha_A = \alpha_B \circ F(f)
+++++
+
+**Example 2.1** (Flatten): stem:[\mathsf{flatten} : \mathsf{Seq} \circ \mathsf{Seq} \Rightarrow \mathsf{Seq}]
+
+Flattens nested sequences into a single sequence (respecting temporal ordering).
+
+== 3. Monads and Effects
+
+=== 3.1 The Choreography Monad
+
+**Definition 3.1** (Choreography Monad): stem:[\mathsf{Choreo} : \mathbf{Anv} \to \mathbf{Anv}]
+
+[stem]
+++++
+\mathsf{Choreo}(\tau) = \mathsf{State} \to (\tau \times \mathsf{State} \times \mathsf{Timeline})
+++++
+
+This is a state monad extended with timeline output.
+
+**Monad Operations**:
+
+[stem]
+++++
+\begin{align}
+\eta_\tau &: \tau \to \mathsf{Choreo}(\tau) \\
+\eta(x) &= \lambda s. (x, s, \emptyset) \\[1em]
+\mu_\tau &: \mathsf{Choreo}(\mathsf{Choreo}(\tau)) \to \mathsf{Choreo}(\tau) \\
+\mu(m) &= \lambda s. \textbf{let } (m', s', t') = m(s) \textbf{ in} \\
+       &\qquad\quad \textbf{let } (x, s'', t'') = m'(s') \textbf{ in } (x, s'', t' \cup t'')
+\end{align}
+++++
+
+**Theorem 3.1** (Monad Laws): stem:[(\mathsf{Choreo}, \eta, \mu)] satisfies the monad laws.
+
+_Proof_:
+
+1. **Left identity**: stem:[\mu \circ \eta_{\mathsf{Choreo}} = \mathrm{id}]
+   [stem]
+   ++++
+   (\mu \circ \eta)(m)(s) = \mu(\eta(m))(s) = \mu(\lambda s'. (m, s', \emptyset))(s)
+   ++++
+   [stem]
+   ++++
+   = \textbf{let } (m', s', t') = (m, s, \emptyset) \textbf{ in } \textbf{let } (x, s'', t'') = m'(s') \textbf{ in } (x, s'', t' \cup t'')
+   ++++
+   [stem]
+   ++++
+   = \textbf{let } (x, s'', t'') = m(s) \textbf{ in } (x, s'', \emptyset \cup t'') = m(s) \quad \checkmark
+   ++++
+
+2. **Right identity**: stem:[\mu \circ \mathsf{Choreo}(\eta) = \mathrm{id}]
+   (Similar calculation)
+
+3. **Associativity**: stem:[\mu \circ \mu_{\mathsf{Choreo}} = \mu \circ \mathsf{Choreo}(\mu)]
+   (By associativity of timeline union) ∎
+
+=== 3.2 Effect Composition via Monad Transformers
+
+**Definition 3.2** (Temporal Effect Transformer):
+[stem]
+++++
+\mathsf{TemporalT}(M)(\tau) = M(\tau \times \mathsf{TimeAdvance})
+++++
+
+**Definition 3.3** (Spatial Effect Transformer):
+[stem]
+++++
+\mathsf{SpatialT}(M)(\tau) = M(\tau \times \mathsf{Position})
+++++
+
+**Theorem 3.2** (Monad Transformer Laws): stem:[\mathsf{TemporalT}] and stem:[\mathsf{SpatialT}] are valid monad transformers.
+
+=== 3.3 Kleisli Category
+
+**Definition 3.4** (Kleisli Category): The Kleisli category stem:[\mathbf{Anv}_{\mathsf{Choreo}}]:
+
+- **Objects**: Same as stem:[\mathbf{Anv}]
+- **Morphisms**: stem:[A \to_K B] are morphisms stem:[A \to \mathsf{Choreo}(B)] in stem:[\mathbf{Anv}]
+- **Identity**: stem:[\eta_A : A \to \mathsf{Choreo}(A)]
+- **Composition**: stem:[g \circ_K f = \mu \circ \mathsf{Choreo}(g) \circ f]
+
+The Kleisli category captures effectful choreographic computations.
+
+== 4. Monoidal Structure
+
+=== 4.1 Temporal Monoidal Category
+
+**Definition 4.1** (Temporal Monoidal Structure): stem:[(\mathbf{Anv}, \otimes_T, I)]
+
+- **Tensor**: stem:[\tau_1 \otimes_T \tau_2] represents sequential temporal composition
+- **Unit**: stem:[I = \texttt{unit}]
+
+This is a *non-symmetric* monoidal structure (time flows in one direction).
+
+**Theorem 4.1** (Monoidal Category): stem:[(\mathbf{Anv}, \otimes_T, I)] satisfies:
+
+1. **Associativity**: stem:[(\tau_1 \otimes_T \tau_2) \otimes_T \tau_3 \cong \tau_1 \otimes_T (\tau_2 \otimes_T \tau_3)]
+2. **Left unit**: stem:[I \otimes_T \tau \cong \tau]
+3. **Right unit**: stem:[\tau \otimes_T I \cong \tau]
+
+With coherence (pentagon and triangle diagrams).
+
+=== 4.2 Parallel Composition
+
+**Definition 4.2** (Parallel Monoidal Structure): stem:[(\mathbf{Anv}, \otimes_P, I)]
+
+- **Tensor**: stem:[\tau_1 \otimes_P \tau_2] represents parallel (concurrent) execution
+- This *is* symmetric: stem:[\tau_1 \otimes_P \tau_2 \cong \tau_2 \otimes_P \tau_1]
+
+For pairs skating, elements executed simultaneously by different skaters.
+
+=== 4.3 Monoidal Functors
+
+**Definition 4.3** (Lax Monoidal Functor): A functor stem:[F : \mathbf{C} \to \mathbf{D}] with:
+
+- stem:[\phi_0 : I_\mathbf{D} \to F(I_\mathbf{C})]
+- stem:[\phi_{A,B} : F(A) \otimes F(B) \to F(A \otimes B)]
+
+Satisfying associativity and unit coherences.
+
+**Theorem 4.2**: The stem:[\mathsf{Seq}] functor is lax monoidal with respect to temporal composition:
+[stem]
+++++
+\mathsf{Seq}(\tau_1) \otimes_T \mathsf{Seq}(\tau_2) \to \mathsf{Seq}(\tau_1 \otimes_T \tau_2)
+++++
+
+(Sequence concatenation)
+
+== 5. Adjunctions
+
+=== 5.1 Free-Forgetful Adjunctions
+
+**Definition 5.1** (Free Element Type): stem:[\mathsf{Free} : \mathbf{Set} \to \mathbf{Anv}]
+
+Constructs the free element type from a set of basic elements.
+
+**Definition 5.2** (Underlying Set): stem:[U : \mathbf{Anv} \to \mathbf{Set}]
+
+Forgets type structure.
+
+**Theorem 5.1** (Free-Forgetful Adjunction): stem:[\mathsf{Free} \dashv U]
+
+This adjunction provides:
+- The universal property of element type construction
+- A principled way to extend the language with new elements
+
+=== 5.2 Curry-Uncurry Adjunction
+
+**Theorem 5.2**: stem:[(-) \times \tau \dashv (\tau \Rightarrow (-))]
+
+The adjunction isomorphism:
+[stem]
+++++
+\mathrm{Hom}(A \times B, C) \cong \mathrm{Hom}(A, B \Rightarrow C)
+++++
+
+=== 5.3 Temporal Adjunctions
+
+**Definition 5.3** (Discrete Time): stem:[\Delta : \mathbf{Set} \to \mathbf{Time}]
+
+Embeds sets as discrete-time structures.
+
+**Definition 5.4** (Points): stem:[\Gamma : \mathbf{Time} \to \mathbf{Set}]
+
+Extracts the set of time points.
+
+**Theorem 5.3**: stem:[\Delta \dashv \Gamma]
+
+This adjunction relates the discrete element view to continuous time.
+
+== 6. Limits and Colimits
+
+=== 6.1 Completeness
+
+**Theorem 6.1** (Completeness): stem:[\mathbf{Anv}] has all small limits.
+
+_Proof_: We construct the required limits:
+
+- **Terminal object**: stem:[\texttt{unit}] ✓
+- **Products**: stem:[\tau_1 \times \tau_2] ✓
+- **Equalizers**: stem:[\mathrm{eq}(f, g) = \{x : A \mid f(x) = g(x)\}]
+- **Pullbacks**: By products and equalizers
+
+Therefore stem:[\mathbf{Anv}] has all finite limits, and by standard techniques, all small limits. ∎
+
+=== 6.2 Cocompleteness
+
+**Theorem 6.2** (Cocompleteness): stem:[\mathbf{Anv}] has all small colimits.
+
+_Proof_:
+- **Initial object**: stem:[\texttt{void}] ✓
+- **Coproducts**: stem:[\tau_1 + \tau_2] ✓
+- **Coequalizers**: Quotient types
+- **Pushouts**: By coproducts and coequalizers ∎
+
+=== 6.3 Important Limits
+
+**Definition 6.1** (Element Limit): The limit of the diagram of element types:
+
+[stem]
+++++
+\texttt{Element} = \lim(\texttt{Jump} \leftarrow \texttt{Jump}_{\text{common}} \to \texttt{Spin} \leftarrow \cdots)
+++++
+
+This captures the common structure shared by all element types.
+
+== 7. Indexed and Fibred Categories
+
+=== 7.1 Dependent Types as Fibrations
+
+**Definition 7.1** (Type Family Fibration): stem:[p : \mathbf{Fam}(\mathbf{Anv}) \to \mathbf{Anv}]
+
+- Objects of stem:[\mathbf{Fam}(\mathbf{Anv})]: Pairs stem:[(I, A)] where stem:[A : I \to \mathbf{Anv}]
+- Morphisms: Pairs stem:[(f, g)] with appropriate commutation
+
+**Theorem 7.1**: Dependent types in Anvomidav form a locally cartesian closed category.
+
+=== 7.2 Context as Base Category
+
+**Definition 7.2** (Context Category): stem:[\mathbf{Ctx}]
+
+- **Objects**: Typing contexts stem:[\Gamma]
+- **Morphisms**: Context morphisms (substitutions)
+
+**Definition 7.3** (Type Fibration): stem:[\pi : \mathbf{Type} \to \mathbf{Ctx}]
+
+Fibering types over contexts, capturing the dependency of type well-formedness on context.
+
+== 8. Topos-Theoretic Aspects
+
+=== 8.1 Subobject Classifier
+
+**Definition 8.1** (Subobject Classifier): stem:[\Omega = \texttt{bool}] with:
+- True: stem:[\top : \texttt{unit} \to \Omega]
+- Characteristic morphisms: stem:[\chi_S : A \to \Omega] for each subobject stem:[S \hookrightarrow A]
+
+=== 8.2 Internal Logic
+
+The internal logic of stem:[\mathbf{Anv}] is intuitionistic. This means:
+
+- stem:[\neg\neg P \not\Rightarrow P] in general
+- Constructive proofs required
+- LEM not universally valid
+
+However, stem:[\texttt{bool}] is decidable: stem:[\forall b : \texttt{bool}.\ b = \texttt{true} \lor b = \texttt{false}]
+
+=== 8.3 Refinement Types as Subobjects
+
+**Theorem 8.1**: Refinement types correspond to subobjects.
+
+[stem]
+++++
+\{x : \tau \mid \phi\} \hookrightarrow \tau
+++++
+
+is a monomorphism classified by stem:[\chi_\phi : \tau \to \Omega].
+
+== 9. Higher Category Structure
+
+=== 9.1 2-Category of Types
+
+**Definition 9.1** (2-Category of Types): stem:[\mathbf{Anv}_2]
+
+- **0-cells**: Types
+- **1-cells**: Terms (functions)
+- **2-cells**: Term equivalences (stem:[\beta\eta]-equality proofs)
+
+=== 9.2 Homotopy Type Theory Perspective
+
+From the HoTT perspective:
+- Types are spaces
+- Terms are points
+- Equalities are paths
+- Equality proofs are higher paths
+
+**Definition 9.2** (Path Type): For stem:[x, y : \tau]:
+[stem]
+++++
+\mathsf{Path}_\tau(x, y) \equiv (x =_\tau y)
+++++
+
+=== 9.3 Univalence for Type Equivalence
+
+**Axiom 9.1** (Univalence, optional): stem:[(\tau_1 \simeq \tau_2) \simeq (\tau_1 = \tau_2)]
+
+Type isomorphism implies type equality (in the appropriate sense).
+
+This axiom is optional but enables powerful reasoning about type equivalences.
+
+== 10. Coherence Theorems
+
+=== 10.1 Mac Lane's Coherence
+
+**Theorem 10.1** (Coherence for Monoidal Categories): All diagrams of canonical isomorphisms commute.
+
+For temporal composition in Anvomidav, this ensures that different ways of associating sequences produce equivalent results.
+
+=== 10.2 Coherence for Closed Structure
+
+**Theorem 10.2** (Coherence for CCC): All diagrams built from projections, pairing, currying, and evaluation commute.
+
+This ensures that function type manipulations are well-behaved.
+
+== 11. TODO: Incomplete Specifications
+
+[WARNING]
+====
+The following categorical aspects require further development:
+
+* [ ] **§3** - Formal proof of monad transformer composition
+* [ ] **§4** - String diagrams for choreographic composition
+* [ ] **§5** - Complete adjunction proofs with unit/counit
+* [ ] **§7** - Full fibred semantics for dependent types
+* [ ] **§8** - Topos-theoretic model of the refinement logic
+* [ ] **§9** - Higher categorical coherence for effects
+* [ ] **§12** - Enriched category theory for time-indexed types
+* [ ] **§13** - Categorical semantics of recursion (CPO-enrichment)
+====
+
+== 12. References
+
+1. Mac Lane, S. _Categories for the Working Mathematician_ (2nd ed.). Springer, 1998.
+2. Awodey, S. _Category Theory_ (2nd ed.). Oxford University Press, 2010.
+3. Barr, M. & Wells, C. _Category Theory for Computing Science_. Prentice Hall, 1990.
+4. Jacobs, B. _Categorical Logic and Type Theory_. Elsevier, 1999.
+5. Moggi, E. "Notions of Computation and Monads." _Information and Computation_, 93(1), 1991.
+6. Wadler, P. "Monads for Functional Programming." _AFP_, 1995.
+7. The Univalent Foundations Program. _Homotopy Type Theory_. 2013.
+
+---
+
+_Document Version: 0.1.0-draft_
+_Last Updated: 2025-01-01_

@@ -1,0 +1,583 @@
+// SPDX-FileCopyrightText: 2025 hyperpolymath
+// SPDX-License-Identifier: MIT OR AGPL-3.0-or-later
+
+= Anvomidav Formal Semantics
+:toc: macro
+:toc-title: Contents
+:toclevels: 4
+:sectnums:
+:stem: latexmath
+
+== Abstract
+
+This document presents the formal semantics of Anvomidav using three complementary approaches: operational semantics (small-step and big-step), denotational semantics, and axiomatic semantics. These formalizations provide the mathematical foundation for compiler correctness, program equivalence, and formal verification of choreographic programs.
+
+toc::[]
+
+== 1. Semantic Domains
+
+=== 1.1 Basic Domains
+
+[stem]
+++++
+\begin{align}
+\mathbb{Z} &\quad \text{(Integers)} \\
+\mathbb{R} &\quad \text{(Real numbers)} \\
+\mathbb{B} &= \{\texttt{true}, \texttt{false}\} \quad \text{(Booleans)} \\
+\mathbb{S} &= \Sigma^* \quad \text{(Strings)} \\
+\mathbb{T} &= \mathbb{R}_{\geq 0} \quad \text{(Time, non-negative reals)} \\
+\mathbb{A} &= [0, 2\pi) \quad \text{(Angles in radians)}
+\end{align}
+++++
+
+=== 1.2 Spatial Domains
+
+[stem]
+++++
+\begin{align}
+\mathsf{Pos}_2 &= \mathbb{R}^2 \quad \text{(2D position on ice)} \\
+\mathsf{Pos}_3 &= \mathbb{R}^3 \quad \text{(3D position including height)} \\
+\mathsf{Vec}_2 &= \mathbb{R}^2 \quad \text{(2D velocity/direction vectors)} \\
+\mathsf{Vec}_3 &= \mathbb{R}^3 \quad \text{(3D velocity vectors)}
+\end{align}
+++++
+
+=== 1.3 Skating-Specific Domains
+
+[stem]
+++++
+\begin{align}
+\mathsf{Edge} &= \{\texttt{LFO}, \texttt{LFI}, \texttt{LBO}, \texttt{LBI}, \texttt{RFO}, \texttt{RFI}, \texttt{RBO}, \texttt{RBI}\} \\
+\mathsf{Foot} &= \{\texttt{Left}, \texttt{Right}\} \\
+\mathsf{Dir} &= \{\texttt{Forward}, \texttt{Backward}\} \\
+\mathsf{Curve} &= \{\texttt{Inside}, \texttt{Outside}, \texttt{Flat}\} \\
+\mathsf{Rot} &= \{\texttt{CW}, \texttt{CCW}\} \quad \text{(Rotation direction)}
+\end{align}
+++++
+
+**Definition 1.1** (Edge Decomposition):
+[stem]
+++++
+\mathsf{edge}: \mathsf{Edge} \to \mathsf{Foot} \times \mathsf{Dir} \times \mathsf{Curve}
+++++
+
+Example: stem:[\mathsf{edge}(\texttt{LFO}) = (\texttt{Left}, \texttt{Forward}, \texttt{Outside})]
+
+=== 1.4 Element Domains
+
+[stem]
+++++
+\begin{align}
+\mathsf{Jump} &= \mathsf{JumpType} \times \mathbb{N} \times \mathsf{Edge} \times \mathsf{Edge} \\
+&\quad \text{where } \mathsf{JumpType} = \{\texttt{Axel}, \texttt{Salchow}, \texttt{ToeLoop}, \texttt{Loop}, \texttt{Flip}, \texttt{Lutz}, \ldots\} \\[1em]
+\mathsf{Spin} &= \mathsf{SpinType} \times \mathsf{Level} \times \mathsf{Duration} \times \mathsf{Position}^* \\
+&\quad \text{where } \mathsf{SpinType} = \{\texttt{Upright}, \texttt{Sit}, \texttt{Camel}, \texttt{Layback}, \texttt{Biellmann}\} \\[1em]
+\mathsf{Step} &= \mathsf{StepType}^+ \times \mathsf{Level} \times \mathsf{Path} \\[1em]
+\mathsf{Lift} &= \mathsf{LiftType} \times \mathsf{Group} \times \mathsf{Level} \times \mathsf{Duration} \\[1em]
+\mathsf{Element} &= \mathsf{Jump} + \mathsf{Spin} + \mathsf{Step} + \mathsf{Lift} + \mathsf{Transition}
+\end{align}
+++++
+
+=== 1.5 Temporal Domains
+
+[stem]
+++++
+\begin{align}
+\mathsf{TimePoint} &= \mathbb{T} \\
+\mathsf{Duration} &= \mathbb{T} \\
+\mathsf{TimeInterval} &= \{(t_1, t_2) \in \mathbb{T}^2 \mid t_1 \leq t_2\} \\
+\mathsf{Beat} &= \mathbb{N} \times \mathbb{N} \quad \text{(measure, beat)} \\
+\mathsf{Tempo} &= \mathbb{R}_{>0} \quad \text{(BPM)}
+\end{align}
+++++
+
+=== 1.6 Path Domain
+
+[stem]
+++++
+\begin{align}
+\mathsf{Path} &= [0, 1] \to \mathsf{Pos}_2 \times \mathsf{Edge} \\
+&\quad \text{(Parameterized path with edge annotations)}
+\end{align}
+++++
+
+A path is a continuous function mapping a normalized parameter to ice position and current edge.
+
+== 2. State and Environment
+
+=== 2.1 Program State
+
+[stem]
+++++
+\sigma \in \mathsf{State} = \mathsf{Env} \times \mathsf{Store} \times \mathsf{SkaterState}^+ \times \mathsf{TemporalState}
+++++
+
+**Definition 2.1** (Environment):
+[stem]
+++++
+\rho \in \mathsf{Env} = \mathsf{Identifier} \rightharpoonup \mathsf{Value}
+++++
+
+**Definition 2.2** (Store):
+[stem]
+++++
+\mu \in \mathsf{Store} = \mathsf{Location} \rightharpoonup \mathsf{Value}
+++++
+
+**Definition 2.3** (Skater State):
+[stem]
+++++
+\begin{align}
+\varsigma \in \mathsf{SkaterState} = \{ &\mathsf{pos}: \mathsf{Pos}_3, \\
+                                        &\mathsf{vel}: \mathsf{Vec}_3, \\
+                                        &\mathsf{orientation}: \mathbb{A}, \\
+                                        &\mathsf{edge}: \mathsf{Edge}, \\
+                                        &\mathsf{current\_element}: \mathsf{Element}\ \mathsf{option} \}
+\end{align}
+++++
+
+**Definition 2.4** (Temporal State):
+[stem]
+++++
+\begin{align}
+\tau \in \mathsf{TemporalState} = \{ &\mathsf{current\_time}: \mathsf{TimePoint}, \\
+                                     &\mathsf{tempo}: \mathsf{Tempo}, \\
+                                     &\mathsf{current\_beat}: \mathsf{Beat}, \\
+                                     &\mathsf{timeline}: \mathsf{Timeline} \}
+\end{align}
+++++
+
+=== 2.2 Timeline
+
+[stem]
+++++
+\mathsf{Timeline} = \mathsf{TimePoint} \rightharpoonup \mathsf{Event}^*
+++++
+
+Where events are scheduled element executions:
+[stem]
+++++
+\mathsf{Event} = \mathsf{Element} \times \mathsf{SkaterID} \times \mathsf{TimeInterval} \times \mathsf{Path}
+++++
+
+== 3. Operational Semantics
+
+=== 3.1 Small-Step Semantics
+
+We define the small-step transition relation:
+[stem]
+++++
+\langle e, \sigma \rangle \to \langle e', \sigma' \rangle
+++++
+
+==== 3.1.1 Expression Evaluation
+
+**E-CONST** (Constants):
+[stem]
+++++
+\frac{}{\langle c, \sigma \rangle \to \langle c, \sigma \rangle}
+++++
+
+**E-VAR** (Variable lookup):
+[stem]
+++++
+\frac{\rho(x) = v}{\langle x, (\rho, \mu, \varsigma, \tau) \rangle \to \langle v, (\rho, \mu, \varsigma, \tau) \rangle}
+++++
+
+**E-BINOP** (Binary operations):
+[stem]
+++++
+\frac{\langle e_1, \sigma \rangle \to \langle e_1', \sigma' \rangle}{\langle e_1 \oplus e_2, \sigma \rangle \to \langle e_1' \oplus e_2, \sigma' \rangle}
+++++
+
+[stem]
+++++
+\frac{\langle e_2, \sigma \rangle \to \langle e_2', \sigma' \rangle}{\langle v_1 \oplus e_2, \sigma \rangle \to \langle v_1 \oplus e_2', \sigma' \rangle}
+++++
+
+[stem]
+++++
+\frac{v = v_1 \llbracket\oplus\rrbracket v_2}{\langle v_1 \oplus v_2, \sigma \rangle \to \langle v, \sigma \rangle}
+++++
+
+==== 3.1.2 Element Execution
+
+**E-JUMP** (Jump execution):
+[stem]
+++++
+\frac{
+\begin{array}{c}
+\mathsf{jump} = (t, n, e_{in}, e_{out}) \\
+\varsigma.\mathsf{edge} = e_{in} \\
+\mathsf{valid\_takeoff}(\varsigma, t) \\
+\varsigma' = \mathsf{execute\_jump}(\varsigma, \mathsf{jump}, \Delta t)
+\end{array}
+}{\langle \texttt{jump}\ t\ n, \sigma \rangle \to \langle \texttt{()}, \sigma[\varsigma \mapsto \varsigma'] \rangle}
+++++
+
+**Definition 3.1** (Jump Execution Function):
+[stem]
+++++
+\mathsf{execute\_jump}(\varsigma, (t, n, e_{in}, e_{out}), \Delta t) = \varsigma'
+++++
+
+where:
+[stem]
+++++
+\begin{align}
+\varsigma'.\mathsf{pos} &= \varsigma.\mathsf{pos} + \mathsf{flight\_trajectory}(t, n, \varsigma.\mathsf{vel}, \Delta t) \\
+\varsigma'.\mathsf{vel} &= \mathsf{landing\_velocity}(t, n, \varsigma.\mathsf{vel}) \\
+\varsigma'.\mathsf{edge} &= e_{out} \\
+\varsigma'.\mathsf{orientation} &= \varsigma.\mathsf{orientation} + n \cdot 2\pi \cdot \mathsf{rot\_dir}(t)
+\end{align}
+++++
+
+**E-SPIN** (Spin execution):
+[stem]
+++++
+\frac{
+\begin{array}{c}
+\mathsf{spin} = (t, l, d, ps) \\
+\varsigma' = \mathsf{execute\_spin}(\varsigma, \mathsf{spin})
+\end{array}
+}{\langle \texttt{spin}\ t\ l, \sigma \rangle \to \langle \texttt{()}, \sigma[\varsigma \mapsto \varsigma', \tau.\mathsf{current\_time} \mathrel{+}= d] \rangle}
+++++
+
+==== 3.1.3 Temporal Control
+
+**E-AT** (Temporal positioning):
+[stem]
+++++
+\frac{
+\begin{array}{c}
+\langle t_{expr}, \sigma \rangle \to^* \langle t, \sigma' \rangle \\
+t \geq \tau.\mathsf{current\_time}
+\end{array}
+}{\langle \texttt{at}\ t_{expr}\ \{\ s\ \}, \sigma \rangle \to \langle s, \sigma'[\tau.\mathsf{current\_time} \mapsto t] \rangle}
+++++
+
+**E-SYNC** (Beat synchronization):
+[stem]
+++++
+\frac{
+\begin{array}{c}
+\langle b_{expr}, \sigma \rangle \to^* \langle (m, b), \sigma' \rangle \\
+t = \mathsf{beat\_to\_time}((m, b), \tau.\mathsf{tempo})
+\end{array}
+}{\langle \texttt{sync}\ b_{expr}\ \{\ s\ \}, \sigma \rangle \to \langle s, \sigma'[\tau.\mathsf{current\_time} \mapsto t] \rangle}
+++++
+
+**Definition 3.2** (Beat to Time Conversion):
+[stem]
+++++
+\mathsf{beat\_to\_time}((m, b), \mathsf{bpm}) = \frac{60 \cdot ((m - 1) \cdot \mathsf{beats\_per\_measure} + b)}{\mathsf{bpm}}
+++++
+
+==== 3.1.4 Spatial Control
+
+**E-PATH** (Path following):
+[stem]
+++++
+\frac{
+\begin{array}{c}
+\langle p_{expr}, \sigma \rangle \to^* \langle p, \sigma' \rangle \\
+p: [0,1] \to \mathsf{Pos}_2 \times \mathsf{Edge}
+\end{array}
+}{\langle \texttt{path}\ p_{expr}\ \{\ s\ \}, \sigma \rangle \to \langle s, \sigma'[\varsigma.\mathsf{path} \mapsto p] \rangle}
+++++
+
+=== 3.2 Big-Step Semantics
+
+The big-step evaluation relation:
+[stem]
+++++
+\langle e, \sigma \rangle \Downarrow \langle v, \sigma' \rangle
+++++
+
+**B-SEQUENCE** (Sequential execution):
+[stem]
+++++
+\frac{
+\langle s_1, \sigma \rangle \Downarrow \langle v_1, \sigma_1 \rangle \quad
+\langle s_2, \sigma_1 \rangle \Downarrow \langle v_2, \sigma_2 \rangle
+}{\langle s_1; s_2, \sigma \rangle \Downarrow \langle v_2, \sigma_2 \rangle}
+++++
+
+**B-CHOREOGRAPHY** (Full choreography):
+[stem]
+++++
+\frac{
+\begin{array}{c}
+\sigma_0 = \mathsf{init}(\mathsf{metadata}) \\
+\langle s_1, \sigma_0 \rangle \Downarrow \langle \_, \sigma_1 \rangle \\
+\cdots \\
+\langle s_n, \sigma_{n-1} \rangle \Downarrow \langle \_, \sigma_n \rangle
+\end{array}
+}{\langle \texttt{choreography}\ \{\ s_1; \ldots; s_n\ \}, \sigma \rangle \Downarrow \langle \sigma_n.\mathsf{timeline}, \sigma_n \rangle}
+++++
+
+== 4. Denotational Semantics
+
+=== 4.1 Semantic Functions
+
+**Definition 4.1** (Expression Semantics):
+[stem]
+++++
+\mathcal{E}: \mathsf{Expr} \to \mathsf{Env} \to \mathsf{Value}
+++++
+
+**Definition 4.2** (Statement Semantics):
+[stem]
+++++
+\mathcal{S}: \mathsf{Stmt} \to \mathsf{State} \to \mathsf{State}
+++++
+
+**Definition 4.3** (Choreography Semantics):
+[stem]
+++++
+\mathcal{C}: \mathsf{Choreography} \to \mathsf{State} \to \mathsf{Timeline}
+++++
+
+=== 4.2 Expression Denotations
+
+[stem]
+++++
+\begin{align}
+\mathcal{E}\llbracket n \rrbracket \rho &= n & \text{(integer)} \\
+\mathcal{E}\llbracket r \rrbracket \rho &= r & \text{(real)} \\
+\mathcal{E}\llbracket x \rrbracket \rho &= \rho(x) & \text{(variable)} \\
+\mathcal{E}\llbracket e_1 + e_2 \rrbracket \rho &= \mathcal{E}\llbracket e_1 \rrbracket \rho + \mathcal{E}\llbracket e_2 \rrbracket \rho \\
+\mathcal{E}\llbracket e_1 \cdot e_2 \rrbracket \rho &= \mathcal{E}\llbracket e_1 \rrbracket \rho \cdot \mathcal{E}\llbracket e_2 \rrbracket \rho \\
+\mathcal{E}\llbracket \texttt{at}\ t \rrbracket \rho &= \mathcal{E}\llbracket t \rrbracket \rho \in \mathsf{TimePoint} \\
+\mathcal{E}\llbracket (x, y) \rrbracket \rho &= (\mathcal{E}\llbracket x \rrbracket \rho, \mathcal{E}\llbracket y \rrbracket \rho) \in \mathsf{Pos}_2
+\end{align}
+++++
+
+=== 4.3 Statement Denotations
+
+[stem]
+++++
+\begin{align}
+\mathcal{S}\llbracket \texttt{skip} \rrbracket \sigma &= \sigma \\[1em]
+\mathcal{S}\llbracket s_1; s_2 \rrbracket \sigma &= \mathcal{S}\llbracket s_2 \rrbracket (\mathcal{S}\llbracket s_1 \rrbracket \sigma) \\[1em]
+\mathcal{S}\llbracket \texttt{at}\ t\ \{s\} \rrbracket \sigma &=
+    \mathcal{S}\llbracket s \rrbracket (\sigma[\tau.\mathsf{time} \mapsto \mathcal{E}\llbracket t \rrbracket]) \\[1em]
+\mathcal{S}\llbracket \texttt{jump}\ j \rrbracket \sigma &=
+    \sigma[\varsigma \mapsto \mathsf{jump\_effect}(j, \varsigma), \\
+    &\qquad\quad \tau.\mathsf{timeline} \mathrel{+}= \mathsf{event}(j, \tau.\mathsf{time})]
+\end{align}
+++++
+
+=== 4.4 Element Effect Functions
+
+**Definition 4.4** (Jump Effect):
+[stem]
+++++
+\mathsf{jump\_effect}: \mathsf{Jump} \times \mathsf{SkaterState} \to \mathsf{SkaterState}
+++++
+
+[stem]
+++++
+\mathsf{jump\_effect}((t, n, e_{in}, e_{out}), \varsigma) =
+\begin{cases}
+\varsigma' & \text{if } \mathsf{valid\_entry}(\varsigma, e_{in}) \\
+\bot & \text{otherwise}
+\end{cases}
+++++
+
+where stem:[\varsigma'] incorporates:
+- Position displacement based on takeoff velocity and rotation
+- Edge transition from stem:[e_{in}] to stem:[e_{out}]
+- Orientation change of stem:[n \cdot 2\pi]
+
+=== 4.5 Choreography Denotation
+
+**Definition 4.5** (Timeline Construction):
+[stem]
+++++
+\mathcal{C}\llbracket \texttt{choreography}(m)\ \{s_1; \ldots; s_n\} \rrbracket \sigma =
+    \pi_{\mathsf{timeline}}(\mathcal{S}\llbracket s_n \rrbracket \cdots \mathcal{S}\llbracket s_1 \rrbracket (\mathsf{init}(m, \sigma)))
+++++
+
+The result is a complete timeline mapping time points to scheduled events.
+
+== 5. Axiomatic Semantics
+
+=== 5.1 Hoare Triples
+
+We use Hoare triples adapted for choreographic programs:
+
+[stem]
+++++
+\{P\}\ S\ \{Q\}
+++++
+
+Where stem:[P] and stem:[Q] are predicates over the program state, including spatial and temporal constraints.
+
+=== 5.2 Proof Rules
+
+**SKIP**:
+[stem]
+++++
+\frac{}{\{P\}\ \texttt{skip}\ \{P\}}
+++++
+
+**SEQUENCE**:
+[stem]
+++++
+\frac{\{P\}\ S_1\ \{Q\} \quad \{Q\}\ S_2\ \{R\}}{\{P\}\ S_1; S_2\ \{R\}}
+++++
+
+**JUMP** (with preconditions):
+[stem]
+++++
+\frac{
+\begin{array}{c}
+\mathsf{valid\_edge}(\varsigma.\mathsf{edge}, e_{in}) \\
+\mathsf{sufficient\_speed}(\varsigma.\mathsf{vel}, j) \\
+\mathsf{valid\_position}(\varsigma.\mathsf{pos})
+\end{array}
+}{\{\mathsf{pre}_j(\varsigma)\}\ \texttt{jump}\ j\ \{\mathsf{post}_j(\varsigma')\}}
+++++
+
+**TEMPORAL**:
+[stem]
+++++
+\frac{\{P \land \tau.\mathsf{time} = t\}\ S\ \{Q\}}{\{P\}\ \texttt{at}\ t\ \{S\}\ \{Q\}}
+++++
+
+**SPATIAL**:
+[stem]
+++++
+\frac{\{P \land \varsigma.\mathsf{pos} = p\}\ S\ \{Q\}}{\{P\}\ \texttt{at}\ p\ \{S\}\ \{Q\}}
+++++
+
+=== 5.3 ISU Rule Predicates
+
+**Definition 5.1** (Element Legality):
+[stem]
+++++
+\mathsf{ISU\_legal}(e, \mathsf{context}) \iff
+\begin{cases}
+\mathsf{jump\_rules}(e) & \text{if } e \in \mathsf{Jump} \\
+\mathsf{spin\_rules}(e) & \text{if } e \in \mathsf{Spin} \\
+\mathsf{step\_rules}(e) & \text{if } e \in \mathsf{Step} \\
+\mathsf{lift\_rules}(e) & \text{if } e \in \mathsf{Lift}
+\end{cases}
+++++
+
+**Definition 5.2** (Combination Legality):
+[stem]
+++++
+\mathsf{valid\_combo}(j_1, j_2) \iff
+\begin{cases}
+j_2.\mathsf{type} \in \{\texttt{ToeLoop}, \texttt{Loop}\} & \text{if direct landing} \\
+\top & \text{if euler transition}
+\end{cases}
+++++
+
+== 6. Semantic Properties
+
+=== 6.1 Determinism
+
+**Theorem 6.1** (Determinism): _For well-typed programs, evaluation is deterministic._
+
+[stem]
+++++
+\langle e, \sigma \rangle \Downarrow \langle v_1, \sigma_1 \rangle \land \langle e, \sigma \rangle \Downarrow \langle v_2, \sigma_2 \rangle \implies v_1 = v_2 \land \sigma_1 = \sigma_2
+++++
+
+**Proof**: By structural induction on expressions and statements. See §10.1.
+
+=== 6.2 Type Safety
+
+**Theorem 6.2** (Progress): _A well-typed expression is either a value or can take a step._
+
+[stem]
+++++
+\vdash e : T \implies e \in \mathsf{Value} \lor \exists e', \sigma'.\ \langle e, \sigma \rangle \to \langle e', \sigma' \rangle
+++++
+
+**Theorem 6.3** (Preservation): _Evaluation preserves types._
+
+[stem]
+++++
+\vdash e : T \land \langle e, \sigma \rangle \to \langle e', \sigma' \rangle \implies \vdash e' : T
+++++
+
+=== 6.3 Temporal Monotonicity
+
+**Theorem 6.4** (Time Only Moves Forward): _Choreographic execution never decreases time._
+
+[stem]
+++++
+\langle s, \sigma \rangle \Downarrow \langle v, \sigma' \rangle \implies \sigma'.\tau.\mathsf{time} \geq \sigma.\tau.\mathsf{time}
+++++
+
+=== 6.4 Spatial Continuity
+
+**Theorem 6.5** (Path Continuity): _Skater paths are continuous functions._
+
+[stem]
+++++
+\forall \epsilon > 0.\ \exists \delta > 0.\ |t_1 - t_2| < \delta \implies \|\varsigma(t_1).\mathsf{pos} - \varsigma(t_2).\mathsf{pos}\| < \epsilon
+++++
+
+This ensures no "teleportation" of skaters.
+
+== 7. Equivalence Relations
+
+=== 7.1 Observational Equivalence
+
+**Definition 7.1** (Observational Equivalence):
+[stem]
+++++
+e_1 \cong e_2 \iff \forall C[\cdot], \sigma.\ \langle C[e_1], \sigma \rangle \Downarrow v_1 \iff \langle C[e_2], \sigma \rangle \Downarrow v_1
+++++
+
+Two expressions are observationally equivalent if they produce the same results in all contexts.
+
+=== 7.2 Choreographic Equivalence
+
+**Definition 7.2** (Timeline Equivalence):
+[stem]
+++++
+c_1 \sim_T c_2 \iff \mathcal{C}\llbracket c_1 \rrbracket = \mathcal{C}\llbracket c_2 \rrbracket
+++++
+
+Two choreographies are equivalent if they produce the same timeline.
+
+**Theorem 7.1** (Commutativity of Non-Overlapping Elements):
+[stem]
+++++
+[t_1, t_1 + d_1) \cap [t_2, t_2 + d_2) = \emptyset \implies
+(\texttt{at}\ t_1\ \{e_1\}; \texttt{at}\ t_2\ \{e_2\}) \sim_T (\texttt{at}\ t_2\ \{e_2\}; \texttt{at}\ t_1\ \{e_1\})
+++++
+
+== 8. TODO: Incomplete Specifications
+
+[WARNING]
+====
+The following semantic aspects require further development:
+
+* [ ] **§3.1.2** - Complete effect semantics for all element types
+* [ ] **§4.4** - Detailed physics-based effect functions
+* [ ] **§5.3** - Full ISU 2024 rule encoding
+* [ ] **§6** - Complete proofs for all stated theorems
+* [ ] **§7** - Compositional semantics for pattern abstraction
+* [ ] **§8** - Concurrency semantics for pairs/synchro skating
+* [ ] **§9** - Error semantics and recovery strategies
+====
+
+== 9. References
+
+1. Plotkin, G. D. "A Structural Approach to Operational Semantics." _DAIMI Report FN-19_, 1981.
+2. Scott, D. & Strachey, C. "Toward a Mathematical Semantics for Computer Languages." _PRG-6_, 1971.
+3. Hoare, C. A. R. "An Axiomatic Basis for Computer Programming." _CACM_, 12(10), 1969.
+4. Nielson, H. R. & Nielson, F. _Semantics with Applications: A Formal Introduction_. Wiley, 1992.
+5. Winskel, G. _The Formal Semantics of Programming Languages_. MIT Press, 1993.
+
+---
+
+_Document Version: 0.1.0-draft_
+_Last Updated: 2025-01-01_

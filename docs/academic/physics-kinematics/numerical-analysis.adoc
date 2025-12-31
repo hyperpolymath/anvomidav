@@ -1,0 +1,516 @@
+// SPDX-FileCopyrightText: 2025 hyperpolymath
+// SPDX-License-Identifier: MIT OR AGPL-3.0-or-later
+
+= Numerical Analysis for Physics Simulation
+:toc: macro
+:toc-title: Contents
+:toclevels: 4
+:sectnums:
+:stem: latexmath
+
+== Abstract
+
+This document presents the numerical methods and error analysis for physics simulation in Anvomidav. We analyze the accuracy and stability of integration schemes for skating dynamics, establish error bounds for trajectory computation, and discuss numerical issues in constraint handling. These foundations ensure that physics validation produces reliable results within quantified tolerances.
+
+toc::[]
+
+== 1. Numerical Integration
+
+=== 1.1 Initial Value Problems
+
+**Definition 1.1** (ODE IVP):
+[stem]
+++++
+\frac{d\vec{y}}{dt} = \vec{f}(t, \vec{y}), \quad \vec{y}(t_0) = \vec{y}_0
+++++
+
+For skating: stem:[\vec{y} = (\vec{x}, \vec{v}, \theta, \omega)] (position, velocity, orientation, angular velocity).
+
+=== 1.2 Euler Methods
+
+**Definition 1.2** (Forward Euler):
+[stem]
+++++
+\vec{y}_{n+1} = \vec{y}_n + h \vec{f}(t_n, \vec{y}_n)
+++++
+
+**Theorem 1.1** (Euler Error): Local truncation error is stem:[O(h^2)], global error is stem:[O(h)].
+
+_Proof_: Taylor expansion:
+[stem]
+++++
+\vec{y}(t + h) = \vec{y}(t) + h\vec{f}(t, \vec{y}) + \frac{h^2}{2}\vec{y}''(\xi)
+++++
+
+Local error: stem:[\frac{h^2}{2}\|\vec{y}''\|_\infty]. Accumulated over stem:[T/h] steps: stem:[O(h)]. ∎
+
+**Definition 1.3** (Backward Euler - Implicit):
+[stem]
+++++
+\vec{y}_{n+1} = \vec{y}_n + h \vec{f}(t_{n+1}, \vec{y}_{n+1})
+++++
+
+Requires solving nonlinear system; A-stable for stiff problems.
+
+=== 1.3 Runge-Kutta Methods
+
+**Definition 1.4** (RK4 - Classical 4th Order):
+[stem]
+++++
+\begin{align}
+\vec{k}_1 &= \vec{f}(t_n, \vec{y}_n) \\
+\vec{k}_2 &= \vec{f}(t_n + \frac{h}{2}, \vec{y}_n + \frac{h}{2}\vec{k}_1) \\
+\vec{k}_3 &= \vec{f}(t_n + \frac{h}{2}, \vec{y}_n + \frac{h}{2}\vec{k}_2) \\
+\vec{k}_4 &= \vec{f}(t_n + h, \vec{y}_n + h\vec{k}_3) \\
+\vec{y}_{n+1} &= \vec{y}_n + \frac{h}{6}(\vec{k}_1 + 2\vec{k}_2 + 2\vec{k}_3 + \vec{k}_4)
+\end{align}
+++++
+
+**Theorem 1.2** (RK4 Error): Local error stem:[O(h^5)], global error stem:[O(h^4)].
+
+=== 1.4 Adaptive Step Size
+
+**Algorithm 1.1** (Embedded RK - Dormand-Prince):
+[source,pseudocode]
+----
+function adaptive_step(y, t, h, tol):
+    y5 = rk5_step(y, t, h)   // 5th order estimate
+    y4 = rk4_step(y, t, h)   // 4th order estimate (embedded)
+    err = ||y5 - y4||
+
+    if err < tol:
+        accept step
+        h_new = h * (tol / err)^0.2
+    else:
+        reject step
+        h_new = h * (tol / err)^0.25
+
+    return h_new
+----
+
+=== 1.5 Symplectic Integrators
+
+For Hamiltonian systems (conservative skating without friction):
+
+**Definition 1.5** (Symplectic Euler):
+[stem]
+++++
+\begin{align}
+\vec{p}_{n+1} &= \vec{p}_n - h \nabla_q H(\vec{q}_n, \vec{p}_{n+1}) \\
+\vec{q}_{n+1} &= \vec{q}_n + h \nabla_p H(\vec{q}_n, \vec{p}_{n+1})
+\end{align}
+++++
+
+**Definition 1.6** (Störmer-Verlet):
+[stem]
+++++
+\begin{align}
+\vec{q}_{n+1} &= 2\vec{q}_n - \vec{q}_{n-1} + h^2 \vec{a}(\vec{q}_n)
+\end{align}
+++++
+
+**Theorem 1.3**: Symplectic integrators preserve the symplectic structure, preventing energy drift.
+
+== 2. Error Analysis
+
+=== 2.1 Error Types
+
+**Definition 2.1** (Local Truncation Error):
+[stem]
+++++
+\tau_n = \vec{y}(t_{n+1}) - \vec{y}_{n+1} \quad \text{(one step, assuming } \vec{y}_n = \vec{y}(t_n)\text{)}
+++++
+
+**Definition 2.2** (Global Error):
+[stem]
+++++
+e_n = \vec{y}(t_n) - \vec{y}_n \quad \text{(accumulated)}
+++++
+
+**Definition 2.3** (Round-off Error):
+[stem]
+++++
+\epsilon_{\text{round}} \approx \epsilon_{\text{mach}} \cdot \frac{1}{h} \cdot n_{\text{ops}}
+++++
+
+For IEEE 754 double: stem:[\epsilon_{\text{mach}} \approx 2.2 \times 10^{-16}].
+
+=== 2.2 Stability Analysis
+
+**Definition 2.4** (Test Equation):
+[stem]
+++++
+y' = \lambda y, \quad \lambda \in \mathbb{C}
+++++
+
+**Definition 2.5** (Stability Region):
+[stem]
+++++
+\mathcal{S} = \{z \in \mathbb{C} \mid |R(z)| \leq 1\}
+++++
+
+where stem:[R(z)] is the stability function.
+
+**Theorem 2.1** (Euler Stability): Forward Euler is stable for stem:[|1 + h\lambda| \leq 1].
+
+For real negative stem:[\lambda], requires stem:[h \leq 2/|\lambda|].
+
+**Theorem 2.2** (RK4 Stability): RK4 stability region includes stem:[|z + 1| \leq 1] for real negative stem:[z].
+
+=== 2.3 Error Bounds for Skating Dynamics
+
+**Lemma 2.1** (Lipschitz Condition): The skating dynamics stem:[\vec{f}] satisfies:
+[stem]
+++++
+\|\vec{f}(t, \vec{y}_1) - \vec{f}(t, \vec{y}_2)\| \leq L \|\vec{y}_1 - \vec{y}_2\|
+++++
+
+with stem:[L \approx 10-100 \text{ s}^{-1}] depending on speed and curvature.
+
+**Theorem 2.3** (Global Error Bound):
+[stem]
+++++
+\|e_n\| \leq \frac{C h^p}{L} (e^{L(t_n - t_0)} - 1)
+++++
+
+where stem:[p] is the method order and stem:[C] depends on derivatives of stem:[\vec{f}].
+
+**Example 2.1** (Jump Trajectory Error):
+For stem:[T = 0.8\text{s}] flight time, RK4 with stem:[h = 0.01\text{s}]:
+[stem]
+++++
+\|e\| \leq 10^{-8} \cdot (e^{10 \cdot 0.8} - 1) \approx 3 \times 10^{-5} \text{ m}
+++++
+
+This is well within acceptable tolerance.
+
+== 3. Floating-Point Considerations
+
+=== 3.1 IEEE 754 Representation
+
+**Definition 3.1** (Double Precision):
+[stem]
+++++
+x = (-1)^s \times 1.m \times 2^{e-1023}
+++++
+
+- Sign: 1 bit
+- Exponent: 11 bits (stem:[e \in [0, 2047]])
+- Mantissa: 52 bits
+
+=== 3.2 Precision Limits
+
+**Theorem 3.1** (Unit Roundoff):
+[stem]
+++++
+\epsilon_{\text{mach}} = 2^{-52} \approx 2.22 \times 10^{-16}
+++++
+
+**Corollary 3.1** (Position Precision): For rink coordinates (stem:[|\vec{x}| \leq 50\text{m}]):
+[stem]
+++++
+\Delta x_{\min} = 50 \times 2^{-52} \approx 10^{-14} \text{ m}
+++++
+
+Far below physical measurement precision.
+
+=== 3.3 Catastrophic Cancellation
+
+**Example 3.1** (Subtraction of Similar Values):
+[stem]
+++++
+a = 1.000001, \quad b = 1.000000 \implies a - b = 10^{-6} \text{ (1 significant digit)}
+++++
+
+**Mitigation**: Use stable formulations:
+- Kahan summation for accumulation
+- Compensated algorithms
+- Higher precision intermediates
+
+=== 3.4 Conditioning
+
+**Definition 3.2** (Condition Number):
+[stem]
+++++
+\kappa(f, x) = \left| \frac{x f'(x)}{f(x)} \right|
+++++
+
+**Example 3.2** (Edge Angle Computation):
+[stem]
+++++
+\theta = \arctan(v_y / v_x)
+++++
+
+Ill-conditioned when stem:[v_x \approx 0]. Use `atan2(v_y, v_x)` instead.
+
+== 4. Constraint Handling
+
+=== 4.1 Algebraic Constraints
+
+**Definition 4.1** (DAE - Differential-Algebraic Equation):
+[stem]
+++++
+\vec{F}(\vec{y}', \vec{y}, t) = 0
+++++
+
+Skating with constraints (e.g., skate on ice: stem:[z = 0]):
+[stem]
+++++
+\begin{align}
+\vec{y}' &= \vec{f}(\vec{y}, t) \\
+\vec{g}(\vec{y}) &= 0
+\end{align}
+++++
+
+=== 4.2 Index Reduction
+
+**Definition 4.2** (DAE Index): Number of differentiations to obtain ODE.
+
+For position constraint stem:[z = 0]:
+- Index 3: stem:[z = 0]
+- Index 2: stem:[\dot{z} = 0]
+- Index 1: stem:[\ddot{z} = -g] (ODE)
+
+=== 4.3 Baumgarte Stabilization
+
+**Definition 4.3** (Stabilized Constraint):
+[stem]
+++++
+\ddot{g} + 2\alpha \dot{g} + \beta^2 g = 0
+++++
+
+Parameters: stem:[\alpha, \beta \approx 1-10] for stability without over-damping.
+
+=== 4.4 Projection Methods
+
+**Algorithm 4.1** (Constraint Projection):
+[source,pseudocode]
+----
+function project_to_constraint(y, g):
+    // Newton iteration to find closest point on constraint manifold
+    for _ in range(max_iter):
+        Δy = -J(y)^T (J(y) J(y)^T)^{-1} g(y)
+        y = y + Δy
+        if ||g(y)|| < tol:
+            break
+    return y
+----
+
+== 5. Path Computation
+
+=== 5.1 Spline Interpolation
+
+**Definition 5.1** (Cubic Spline):
+[stem]
+++++
+S_i(x) = a_i + b_i(x - x_i) + c_i(x - x_i)^2 + d_i(x - x_i)^3
+++++
+
+Conditions:
+- Interpolation: stem:[S_i(x_i) = y_i]
+- Continuity: stem:[S_{i-1}(x_i) = S_i(x_i)]
+- Smooth: stem:[S'_{i-1}(x_i) = S'_i(x_i)], stem:[S''_{i-1}(x_i) = S''_i(x_i)]
+
+**Theorem 5.1** (Spline Error):
+[stem]
+++++
+\|f - S\|_\infty \leq \frac{5}{384} h^4 \|f^{(4)}\|_\infty
+++++
+
+=== 5.2 Bézier Curve Evaluation
+
+**Algorithm 5.1** (de Casteljau):
+[source,pseudocode]
+----
+function bezier(t, P0, P1, P2, P3):
+    Q0 = lerp(t, P0, P1)
+    Q1 = lerp(t, P1, P2)
+    Q2 = lerp(t, P2, P3)
+    R0 = lerp(t, Q0, Q1)
+    R1 = lerp(t, Q1, Q2)
+    return lerp(t, R0, R1)
+----
+
+**Theorem 5.2** (de Casteljau Stability): Algorithm is numerically stable with error stem:[O(\epsilon_{\text{mach}})].
+
+=== 5.3 Arc Length Parameterization
+
+**Problem 5.1**: Given parametric curve stem:[\gamma(t)], find stem:[\gamma(s)] where stem:[s] is arc length.
+
+**Algorithm 5.2** (Arc Length Table):
+[source,pseudocode]
+----
+function build_arc_length_table(γ, n_samples):
+    s = [0]
+    for i in 1..n_samples:
+        t = i / n_samples
+        ds = ||γ'(t)|| * dt
+        s.append(s[-1] + ds)
+    return s
+
+function arc_length_param(γ, s_table, s_target):
+    // Binary search for t such that s(t) ≈ s_target
+    t = binary_search(s_table, s_target)
+    return t
+----
+
+== 6. Collision Detection Numerics
+
+=== 6.1 Continuous Collision Detection
+
+**Problem 6.1**: Find stem:[t^* \in [0, h]] where stem:[d(\vec{x}_1(t), \vec{x}_2(t)) = r_1 + r_2].
+
+**Algorithm 6.1** (Bisection Root Finding):
+[source,pseudocode]
+----
+function find_collision_time(x1, v1, x2, v2, r, h):
+    f(t) = ||x1(t) - x2(t)|| - r
+
+    if f(0) < 0 or f(h) > 0:
+        return null  // No collision in interval
+
+    // Bisection
+    t_lo, t_hi = 0, h
+    while t_hi - t_lo > tol:
+        t_mid = (t_lo + t_hi) / 2
+        if f(t_mid) < 0:
+            t_hi = t_mid
+        else:
+            t_lo = t_mid
+
+    return t_mid
+----
+
+=== 6.2 Interval Arithmetic
+
+**Definition 6.1** (Interval Arithmetic):
+[stem]
+++++
+[a, b] + [c, d] = [a + c, b + d]
+++++
+[stem]
+++++
+[a, b] \times [c, d] = [\min(P), \max(P)], \quad P = \{ac, ad, bc, bd\}
+++++
+
+**Application**: Bound rounding errors in distance computation.
+
+=== 6.3 Robust Geometric Predicates
+
+**Definition 6.2** (Orientation Test):
+[stem]
+++++
+\text{orient2d}(a, b, c) = \text{sign}\det\begin{pmatrix} a_x - c_x & a_y - c_y \\ b_x - c_x & b_y - c_y \end{pmatrix}
+++++
+
+**Theorem 6.1** (Robust Orientation): Using exact arithmetic or adaptive precision, orientation is computed correctly.
+
+**Implementation**: Shewchuk's robust predicates.
+
+== 7. Linear Algebra
+
+=== 7.1 Matrix Factorization
+
+**LU Decomposition**: stem:[A = LU]
+- Complexity: stem:[O(n^3)]
+- Used for: Solving linear systems in implicit methods
+
+**QR Decomposition**: stem:[A = QR]
+- Complexity: stem:[O(n^3)]
+- Used for: Least squares, stable computation
+
+=== 7.2 Numerical Stability
+
+**Definition 7.1** (Matrix Condition Number):
+[stem]
+++++
+\kappa(A) = \|A\| \cdot \|A^{-1}\|
+++++
+
+**Theorem 7.1** (Error Amplification):
+[stem]
+++++
+\frac{\|\Delta x\|}{\|x\|} \leq \kappa(A) \cdot \frac{\|\Delta b\|}{\|b\|}
+++++
+
+=== 7.3 Sparse Systems
+
+For large multi-skater simulations:
+
+**Algorithm 7.1** (Conjugate Gradient):
+- Complexity: stem:[O(n \cdot \text{nnz} \cdot k)] for stem:[k] iterations
+- Suitable for symmetric positive definite systems
+
+== 8. Verification and Validation
+
+=== 8.1 Method of Manufactured Solutions
+
+**Algorithm 8.1** (MMS):
+1. Choose exact solution stem:[\vec{y}^*(t)]
+2. Compute source term stem:[\vec{s}(t) = \vec{y}^{*\prime}(t) - \vec{f}(t, \vec{y}^*(t))]
+3. Solve modified problem with source term
+4. Compare numerical solution to stem:[\vec{y}^*]
+5. Verify expected convergence order
+
+=== 8.2 Conservation Tests
+
+**Test 8.1** (Energy Conservation): For frictionless glide:
+[stem]
+++++
+E = \frac{1}{2}m v^2 = \text{const}
+++++
+
+Monitor: stem:[|E(t) - E(0)| / E(0) < \epsilon]
+
+**Test 8.2** (Angular Momentum): For spin without friction:
+[stem]
+++++
+L = I \omega = \text{const}
+++++
+
+=== 8.3 Convergence Testing
+
+**Algorithm 8.2** (Richardson Extrapolation):
+[source,pseudocode]
+----
+function verify_convergence(solver, problem, h_values):
+    errors = []
+    for h in h_values:
+        y_h = solver(problem, h)
+        err = ||y_h - y_exact||
+        errors.append(err)
+
+    // Compute convergence order
+    for i in range(len(errors) - 1):
+        order = log(errors[i] / errors[i+1]) / log(h_values[i] / h_values[i+1])
+        print(f"Observed order: {order}")
+----
+
+== 9. TODO: Incomplete Specifications
+
+[WARNING]
+====
+The following numerical aspects require further development:
+
+* [ ] **§1** - Complete stability analysis for all methods
+* [ ] **§2** - Tight error bounds for skating dynamics
+* [ ] **§4** - DAE solver for constrained dynamics
+* [ ] **§5** - Higher-order path interpolation
+* [ ] **§6** - GPU-accelerated collision detection
+* [ ] **§7** - Iterative solvers for large systems
+* [ ] **§8** - Comprehensive validation test suite
+* [ ] **§10** - Uncertainty quantification
+====
+
+== 10. References
+
+1. Hairer, E., Nørsett, S. P., & Wanner, G. _Solving Ordinary Differential Equations I_. Springer, 1993.
+2. Hairer, E., Lubich, C., & Wanner, G. _Geometric Numerical Integration_. Springer, 2006.
+3. Higham, N. J. _Accuracy and Stability of Numerical Algorithms_. SIAM, 2002.
+4. Shewchuk, J. R. "Adaptive Precision Floating-Point Arithmetic." _Discrete & Computational Geometry_, 1997.
+5. Ascher, U. M. & Petzold, L. R. _Computer Methods for ODEs and DAEs_. SIAM, 1998.
+
+---
+
+_Document Version: 0.1.0-draft_
+_Last Updated: 2025-01-01_

@@ -1,0 +1,529 @@
+// SPDX-FileCopyrightText: 2025 hyperpolymath
+// SPDX-License-Identifier: MIT OR AGPL-3.0-or-later
+
+= Abstract Interpretation for Static Analysis
+:toc: macro
+:toc-title: Contents
+:toclevels: 4
+:sectnums:
+:stem: latexmath
+
+== Abstract
+
+This document presents the abstract interpretation framework for static analysis in Anvomidav. We define abstract domains for temporal, spatial, and skating-specific properties, establish soundness via Galois connections, and describe fixed-point computation algorithms. These techniques enable compile-time detection of temporal conflicts, spatial violations, and infeasible choreographic sequences.
+
+toc::[]
+
+== 1. Foundations of Abstract Interpretation
+
+=== 1.1 The Abstraction Paradigm
+
+**Definition 1.1** (Concrete Domain): The set of all possible program states:
+[stem]
+++++
+\mathcal{C} = \mathcal{P}(\mathsf{State})
+++++
+
+**Definition 1.2** (Abstract Domain): A finitary representation:
+[stem]
+++++
+\mathcal{A} = (A, \sqsubseteq, \sqcup, \sqcap, \bot, \top)
+++++
+
+forming a complete lattice.
+
+=== 1.2 Galois Connections
+
+**Definition 1.3** (Galois Connection):
+[stem]
+++++
+(\mathcal{C}, \subseteq) \galmark{\alpha}{\gamma} (\mathcal{A}, \sqsubseteq)
+++++
+
+where:
+- stem:[\alpha : \mathcal{C} \to \mathcal{A}] (abstraction)
+- stem:[\gamma : \mathcal{A} \to \mathcal{C}] (concretization)
+- stem:[\forall c \in \mathcal{C}, a \in \mathcal{A}: \alpha(c) \sqsubseteq a \iff c \subseteq \gamma(a)]
+
+**Lemma 1.1** (Galois Connection Properties):
+1. stem:[\alpha] and stem:[\gamma] are monotone
+2. stem:[c \subseteq \gamma(\alpha(c))] (soundness)
+3. stem:[\alpha(\gamma(a)) \sqsubseteq a] (precision)
+
+=== 1.3 Soundness Criterion
+
+**Definition 1.4** (Sound Abstract Operation):
+[stem]
+++++
+f^\# : \mathcal{A} \to \mathcal{A} \text{ is sound for } f : \mathcal{C} \to \mathcal{C} \text{ if}
+++++
+[stem]
+++++
+\forall a \in \mathcal{A}: f(\gamma(a)) \subseteq \gamma(f^\#(a))
+++++
+
+Equivalently: stem:[\alpha \circ f \circ \gamma \sqsubseteq f^\#]
+
+=== 1.4 Fixed-Point Computation
+
+**Theorem 1.1** (Knaster-Tarski): In a complete lattice, every monotone function has a least fixed point:
+[stem]
+++++
+\mathsf{lfp}(f) = \bigsqcap \{x \mid f(x) \sqsubseteq x\}
+++++
+
+**Algorithm 1.1** (Kleene Iteration):
+[source,pseudocode]
+----
+function lfp(f, bot):
+    x = bot
+    while f(x) ⊐ x:
+        x = f(x)
+    return x
+----
+
+=== 1.5 Widening and Narrowing
+
+**Definition 1.5** (Widening): stem:[\nabla : \mathcal{A} \times \mathcal{A} \to \mathcal{A}]
+[stem]
+++++
+\begin{align}
+a \sqsubseteq a \nabla b &\text{ and } b \sqsubseteq a \nabla b \\
+\text{Chains } a_0 \nabla a_1 \nabla \cdots &\text{ are eventually stable}
+\end{align}
+++++
+
+**Definition 1.6** (Narrowing): stem:[\triangle : \mathcal{A} \times \mathcal{A} \to \mathcal{A}]
+[stem]
+++++
+a \sqsubseteq b \implies a \sqsubseteq a \triangle b \sqsubseteq b
+++++
+
+Used to improve precision after widening.
+
+== 2. Numerical Abstract Domains
+
+=== 2.1 Interval Domain
+
+**Definition 2.1** (Interval Domain):
+[stem]
+++++
+\mathsf{Int} = \{[l, u] \mid l, u \in \mathbb{Z} \cup \{-\infty, +\infty\}, l \leq u\} \cup \{\bot\}
+++++
+
+**Operations**:
+[stem]
+++++
+\begin{align}
+[l_1, u_1] \sqcup [l_2, u_2] &= [\min(l_1, l_2), \max(u_1, u_2)] \\
+[l_1, u_1] \sqcap [l_2, u_2] &= [\max(l_1, l_2), \min(u_1, u_2)] \\
+[l_1, u_1] +^\# [l_2, u_2] &= [l_1 + l_2, u_1 + u_2] \\
+[l_1, u_1] \times^\# [l_2, u_2] &= [\min(P), \max(P)] \text{ where } P = \{l_1 l_2, l_1 u_2, u_1 l_2, u_1 u_2\}
+\end{align}
+++++
+
+**Widening**:
+[stem]
+++++
+[l_1, u_1] \nabla [l_2, u_2] = [l_2 < l_1 ? -\infty : l_1, u_2 > u_1 ? +\infty : u_1]
+++++
+
+=== 2.2 Polyhedra Domain
+
+**Definition 2.2** (Convex Polyhedra):
+[stem]
+++++
+\mathsf{Poly} = \{Ax \leq b \mid A \in \mathbb{Q}^{m \times n}, b \in \mathbb{Q}^m\}
+++++
+
+**Operations**: Constraint-based or generator-based representation.
+
+**Complexity**: Exponential in dimension; practical for small stem:[n].
+
+=== 2.3 Octagon Domain
+
+**Definition 2.3** (Octagons): Constraints of form stem:[\pm x_i \pm x_j \leq c]:
+[stem]
+++++
+\mathsf{Oct} = \{(\pm x_i \pm x_j \leq c_{ij}) \mid i, j \in [1, n]\}
+++++
+
+**Complexity**: stem:[O(n^3)] for operations.
+
+=== 2.4 Zones Domain
+
+**Definition 2.4** (Zones): Difference constraints:
+[stem]
+++++
+\mathsf{Zone} = \{(x_i - x_j \leq c_{ij}) \mid i, j \in [0, n]\}
+++++
+
+Ideal for temporal analysis (difference bounds).
+
+== 3. Temporal Abstract Domains
+
+=== 3.1 Temporal Interval Domain
+
+**Definition 3.1** (Time Interval):
+[stem]
+++++
+\mathsf{TimeInt}^\# = \{[t_1, t_2] \mid t_1, t_2 \in \mathbb{R}_{\geq 0}, t_1 \leq t_2\} \cup \{\bot, \top\}
+++++
+
+**Abstraction**: stem:[\alpha(\{t_1, \ldots, t_n\}) = [\min(t_i), \max(t_i)]]
+
+**Concretization**: stem:[\gamma([t_1, t_2]) = \{t \mid t_1 \leq t \leq t_2\}]
+
+=== 3.2 Temporal Ordering Domain
+
+**Definition 3.2** (Before Relation):
+[stem]
+++++
+\mathsf{Before}^\# = \mathcal{P}(\mathsf{Element} \times \mathsf{Element})
+++++
+
+Tracks which elements must execute before others.
+
+**Operations**:
+[stem]
+++++
+\begin{align}
+\mathsf{Before}^\#_1 \sqcup \mathsf{Before}^\#_2 &= \mathsf{Before}^\#_1 \cap \mathsf{Before}^\#_2 \\
+\mathsf{Before}^\#_1 \sqcap \mathsf{Before}^\#_2 &= \mathsf{Before}^\#_1 \cup \mathsf{Before}^\#_2
+\end{align}
+++++
+
+(Note: Reversed because more ordering info = more precise)
+
+=== 3.3 Scheduling Domain
+
+**Definition 3.3** (Schedule Constraints):
+[stem]
+++++
+\mathsf{Sched}^\# = (E \to \mathsf{TimeInt}^\#) \times \mathsf{Before}^\#
+++++
+
+Maps elements to time intervals and tracks ordering.
+
+**Transfer Functions**:
+[source,pseudocode]
+----
+function analyze_at(t, s, σ):
+    σ' = σ[current_time := [t, t]]
+    return analyze_statement(s, σ')
+
+function analyze_sequence(s1, s2, σ):
+    σ1 = analyze_statement(s1, σ)
+    σ2 = analyze_statement(s2, σ1)
+    return σ2 with (s1 before s2)
+----
+
+=== 3.4 Overlap Detection
+
+**Algorithm 3.1** (Conflict Detection):
+[source,pseudocode]
+----
+function detect_conflicts(elements, schedules):
+    conflicts = []
+    for e1, e2 in pairs(elements):
+        if same_skater(e1, e2):
+            i1 = schedules[e1]
+            i2 = schedules[e2]
+            if may_overlap(i1, i2):
+                conflicts.add((e1, e2, "potential temporal conflict"))
+    return conflicts
+
+function may_overlap([l1, u1], [l2, u2]):
+    return l1 ≤ u2 and l2 ≤ u1
+----
+
+== 4. Spatial Abstract Domains
+
+=== 4.1 Zone Domain (Rink Partitioning)
+
+**Definition 4.1** (Spatial Zones):
+[stem]
+++++
+\mathsf{Zone}^\# = \mathcal{P}(\{\mathsf{NE}, \mathsf{NW}, \mathsf{SE}, \mathsf{SW}, \mathsf{Center}\})
+++++
+
+**Abstraction**: stem:[\alpha(\{(x, y)\}) = \{\mathsf{zone}(x, y)\}]
+
+=== 4.2 Bounding Box Domain
+
+**Definition 4.2** (Bounding Box):
+[stem]
+++++
+\mathsf{BBox}^\# = [x_{\min}, x_{\max}] \times [y_{\min}, y_{\max}]
+++++
+
+**Operations**:
+[stem]
+++++
+\begin{align}
+\mathsf{BBox}^\#_1 \sqcup \mathsf{BBox}^\#_2 &= [\min(x_{\min}), \max(x_{\max})] \times [\min(y_{\min}), \max(y_{\max})] \\
+\mathsf{translate}^\#([x, y], d) &= [x + d_x, y + d_y]
+\end{align}
+++++
+
+=== 4.3 Convex Hull Domain
+
+**Definition 4.3** (Convex Hull): Abstract regions as convex polygons.
+[stem]
+++++
+\mathsf{ConvHull}^\# = \text{convex polygons in } \mathbb{R}^2
+++++
+
+**Operations**:
+- Join: Convex hull of union
+- Meet: Polygon intersection
+
+=== 4.4 Rink Containment Verification
+
+**Algorithm 4.1** (Rink Check):
+[source,pseudocode]
+----
+function verify_containment(path_abstraction):
+    for bbox in path_abstraction:
+        if not rink.contains(bbox):
+            return (false, bbox)
+    return (true, null)
+----
+
+=== 4.5 Collision Analysis
+
+**Algorithm 4.2** (Collision Check for Pairs):
+[source,pseudocode]
+----
+function check_collision(pos1: BBox#, pos2: BBox#):
+    if overlaps(pos1.expand(safety_margin), pos2):
+        return "potential collision"
+    return "safe"
+----
+
+== 5. Edge Flow Domain
+
+=== 5.1 Edge Transition Abstraction
+
+**Definition 5.1** (Edge Flow):
+[stem]
+++++
+\mathsf{EdgeFlow}^\# = \mathsf{Edge} \to \mathcal{P}(\mathsf{Edge})
+++++
+
+Maps entry edge to possible exit edges.
+
+=== 5.2 Element Edge Requirements
+
+**Definition 5.2** (Edge Constraints):
+[source]
+----
+lutz:    LBO → RBO
+flip:    LBI → RBO
+loop:    RBI → RBO
+salchow: LBI → RBO
+axel:    LFO → RBO
+----
+
+**Transfer Function**:
+[source,pseudocode]
+----
+function analyze_jump(jump_type, edge_in):
+    required = entry_edge(jump_type)
+    if edge_in ⊑ {required}:
+        return {exit_edge(jump_type)}
+    else:
+        report_warning("possible wrong edge")
+        return {exit_edge(jump_type)}  // continue analysis
+----
+
+=== 5.3 Path Edge Analysis
+
+**Algorithm 5.1** (Edge Path Verification):
+[source,pseudocode]
+----
+function analyze_path(elements):
+    edge = initial_edge()
+    for elem in elements:
+        required = entry_requirement(elem)
+        if not compatible(edge, required):
+            report("edge transition violation before", elem)
+        edge = edge_effect(elem, edge)
+    return edge
+----
+
+== 6. ISU Rule Abstract Domain
+
+=== 6.1 Element Count Domain
+
+**Definition 6.1** (Element Counts):
+[stem]
+++++
+\mathsf{Count}^\# = \mathsf{ElementType} \to \mathsf{Int}^\#
+++++
+
+Tracks count intervals for each element type.
+
+=== 6.2 Repetition Tracking
+
+**Definition 6.2** (Repetition Domain):
+[stem]
+++++
+\mathsf{Rep}^\# = \mathsf{JumpType} \times \mathsf{Rotations} \to \{0, 1, 2, \geq 3\}
+++++
+
+Abstract counts for Zayak rule checking.
+
+**Transfer Function**:
+[source,pseudocode]
+----
+function analyze_jump_add(jump, rep_state):
+    key = (jump.type, jump.rotations)
+    rep_state'[key] = min(rep_state[key] + 1, 3)
+    return rep_state'
+----
+
+=== 6.3 Combination Validity
+
+**Definition 6.3** (Combo State):
+[stem]
+++++
+\mathsf{Combo}^\# = \{\mathsf{Empty}, \mathsf{After1st}, \mathsf{After2nd}, \mathsf{Complete}, \mathsf{Invalid}\}
+++++
+
+**Transfer Function**:
+[source,pseudocode]
+----
+function combo_transition(state, jump):
+    match state:
+        Empty → After1st
+        After1st:
+            if jump.type in {ToeLoop, Loop} or prev was Euler:
+                → After2nd
+            else:
+                → Invalid
+        After2nd:
+            if jump.type in {ToeLoop, Loop}:
+                → Complete
+            else:
+                → Invalid
+        Complete → Invalid (too many jumps)
+----
+
+== 7. Program Analysis Algorithm
+
+=== 7.1 Worklist Algorithm
+
+**Algorithm 7.1** (Chaotic Iteration):
+[source,pseudocode]
+----
+function analyze(cfg):
+    state = {node: ⊥ for node in cfg.nodes}
+    state[cfg.entry] = initial_state
+    worklist = [cfg.entry]
+
+    while worklist not empty:
+        node = worklist.pop()
+        for succ in cfg.successors(node):
+            new_state = transfer(node, state[node])
+            if new_state ⊐ state[succ]:
+                state[succ] = state[succ] ⊔ new_state
+                worklist.push(succ)
+
+    return state
+----
+
+=== 7.2 Widening Strategy
+
+**Algorithm 7.2** (Delayed Widening):
+[source,pseudocode]
+----
+function analyze_with_widening(cfg, delay=3):
+    iteration_count = {node: 0 for node in cfg.nodes}
+    # ... same as above, but:
+    if new_state ⊐ state[succ]:
+        iteration_count[succ] += 1
+        if iteration_count[succ] > delay:
+            state[succ] = state[succ] ∇ new_state
+        else:
+            state[succ] = state[succ] ⊔ new_state
+        worklist.push(succ)
+----
+
+=== 7.3 Precision Recovery
+
+**Algorithm 7.3** (Narrowing Pass):
+[source,pseudocode]
+----
+function narrow(cfg, widened_state):
+    for _ in range(narrowing_iterations):
+        for node in cfg.nodes:
+            for pred in cfg.predecessors(node):
+                new_state = transfer(pred, widened_state[pred])
+                widened_state[node] = widened_state[node] △ new_state
+    return widened_state
+----
+
+== 8. Soundness Proofs
+
+=== 8.1 Temporal Domain Soundness
+
+**Theorem 8.1**: The temporal interval domain is sound.
+
+_Proof_:
+[stem]
+++++
+\begin{align}
+&\forall e, t.\ t \in \mathsf{exec\_time}(e) \implies t \in \gamma(\alpha(\{t\})) \\
+&\text{since } \gamma([t, t]) = \{t\} \supseteq \{t\}
+\end{align}
+++++
+
+For joins: stem:[\gamma(I_1) \cup \gamma(I_2) \subseteq \gamma(I_1 \sqcup I_2)] by interval definition. ∎
+
+=== 8.2 Spatial Domain Soundness
+
+**Theorem 8.2**: The bounding box domain is sound.
+
+_Proof_: Bounding boxes over-approximate point sets:
+[stem]
+++++
+\{(x, y)\} \subseteq [x, x] \times [y, y] = \gamma(\alpha(\{(x, y)\}))
+++++
+
+∎
+
+=== 8.3 Analysis Soundness
+
+**Theorem 8.3**: The worklist algorithm computes a sound over-approximation.
+
+_Proof_: By induction on iteration count. Initial state is sound. Transfer functions are sound (by construction). Join preserves soundness. ∎
+
+== 9. TODO: Incomplete Specifications
+
+[WARNING]
+====
+The following abstract interpretation aspects require further development:
+
+* [ ] **§2** - Complete polyhedra operations
+* [ ] **§3** - Widening for temporal domains
+* [ ] **§4** - Curved path abstractions
+* [ ] **§5** - Complete edge transition table
+* [ ] **§6** - All ISU rules encoded
+* [ ] **§7** - Interprocedural analysis
+* [ ] **§8** - Machine-verified soundness proofs
+* [ ] **§10** - Relational domains for pairs skating
+====
+
+== 10. References
+
+1. Cousot, P. & Cousot, R. "Abstract Interpretation: A Unified Lattice Model." _POPL_, 1977.
+2. Cousot, P. & Cousot, R. "Systematic Design of Program Analysis Frameworks." _POPL_, 1979.
+3. Miné, A. "The Octagon Abstract Domain." _HOSC_, 19(1), 2006.
+4. Cousot, P. & Halbwachs, N. "Automatic Discovery of Linear Restraints." _POPL_, 1978.
+5. Nielson, F., Nielson, H. R., & Hankin, C. _Principles of Program Analysis_. Springer, 2005.
+
+---
+
+_Document Version: 0.1.0-draft_
+_Last Updated: 2025-01-01_
