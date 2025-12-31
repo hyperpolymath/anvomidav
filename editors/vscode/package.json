@@ -1,0 +1,104 @@
+{
+  "name": "anvomidav",
+  "displayName": "Anvomidav",
+  "description": "Language support for Anvomidav figure skating choreography DSL",
+  "version": "0.1.0",
+  "publisher": "hyperpolymath",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/hyperpolymath/anvomidav"
+  },
+  "categories": [
+    "Programming Languages",
+    "Linters"
+  ],
+  "keywords": [
+    "figure skating",
+    "choreography",
+    "DSL",
+    "anvomidav"
+  ],
+  "engines": {
+    "vscode": "^1.75.0"
+  },
+  "activationEvents": [
+    "onLanguage:anvomidav"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "languages": [
+      {
+        "id": "anvomidav",
+        "aliases": [
+          "Anvomidav",
+          "anv"
+        ],
+        "extensions": [
+          ".anv"
+        ],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "anvomidav",
+        "scopeName": "source.anv",
+        "path": "./syntaxes/anvomidav.tmLanguage.json"
+      }
+    ],
+    "configuration": {
+      "title": "Anvomidav",
+      "properties": {
+        "anvomidav.lsp.path": {
+          "type": "string",
+          "default": "anv-lsp",
+          "description": "Path to the Anvomidav language server binary"
+        },
+        "anvomidav.validation.discipline": {
+          "type": "string",
+          "enum": [
+            "singles",
+            "pairs",
+            "ice-dance"
+          ],
+          "default": "singles",
+          "description": "Default discipline for ISU rule validation"
+        },
+        "anvomidav.trace.server": {
+          "type": "string",
+          "enum": [
+            "off",
+            "messages",
+            "verbose"
+          ],
+          "default": "off",
+          "description": "Traces the communication between VS Code and the language server"
+        }
+      }
+    },
+    "commands": [
+      {
+        "command": "anvomidav.restart",
+        "title": "Anvomidav: Restart Language Server"
+      },
+      {
+        "command": "anvomidav.showInfo",
+        "title": "Anvomidav: Show Program Info"
+      }
+    ]
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./"
+  },
+  "dependencies": {
+    "vscode-languageclient": "^9.0.1"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "@types/vscode": "^1.75.0",
+    "typescript": "^5.0.0"
+  }
+}

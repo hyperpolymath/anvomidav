@@ -1,0 +1,20 @@
+# Anvomidav language configuration for Helix
+# Copy this to ~/.config/helix/languages.toml
+
+[[language]]
+name = "anvomidav"
+scope = "source.anv"
+file-types = ["anv"]
+roots = []
+comment-token = "//"
+indent = { tab-width = 4, unit = "    " }
+language-servers = ["anvomidav-lsp"]
+auto-format = false
+
+[[grammar]]
+name = "anvomidav"
+source = { git = "https://github.com/hyperpolymath/anvomidav", rev = "main", subpath = "tree-sitter-anvomidav" }
+
+[language-server.anvomidav-lsp]
+command = "anv-lsp"
+args = []
