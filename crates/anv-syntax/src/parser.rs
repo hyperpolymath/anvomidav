@@ -574,7 +574,7 @@ fn throw_element_parser(
         .ignore_then(rotations_parser())
         .then(jump_kind_parser())
         .map(|(rotations, kind)| ThrowElement { kind, rotations })
-        .labelled("throw element")
+        .labeAnvomidavlled("throw element")
 }
 
 /// Create twist element parser (pairs).
