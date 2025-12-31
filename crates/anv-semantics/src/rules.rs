@@ -56,7 +56,7 @@ impl Discipline {
 }
 
 /// Rules for a specific segment type.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct SegmentRules {
     /// Minimum duration in seconds.
     pub min_duration: Option<u32>,
@@ -121,27 +121,6 @@ pub enum RequiredElementType {
     DeathSpiral,
     Pattern,
     Twizzle,
-}
-
-impl Default for SegmentRules {
-    fn default() -> Self {
-        Self {
-            min_duration: None,
-            max_duration: None,
-            max_jumps: None,
-            max_spins: None,
-            step_sequences: None,
-            max_triple_quads: None,
-            max_axels: None,
-            required_lifts: None,
-            required_throws: None,
-            required_twists: None,
-            required_death_spirals: None,
-            pattern_repetitions: None,
-            required_twizzles: None,
-            required_elements: vec![],
-        }
-    }
 }
 
 impl SegmentRules {
