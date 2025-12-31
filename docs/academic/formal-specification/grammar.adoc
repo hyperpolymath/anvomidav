@@ -1,0 +1,826 @@
+// SPDX-FileCopyrightText: 2025 hyperpolymath
+// SPDX-License-Identifier: MIT OR AGPL-3.0-or-later
+
+= Anvomidav Formal Grammar Specification
+:toc: macro
+:toc-title: Contents
+:toclevels: 4
+:sectnums:
+:stem: latexmath
+
+== Abstract
+
+This document provides the formal grammar specification for Anvomidav, a domain-specific language for figure skating choreography notation. We present the complete Extended Backus-Naur Form (EBNF) grammar, lexical specification, and syntactic structure. The grammar is designed to be unambiguous, context-free (with minor context-sensitive extensions for semantic validation), and amenable to LL(k) or LALR(1) parsing.
+
+toc::[]
+
+== 1. Lexical Specification
+
+=== 1.1 Character Sets
+
+[stem]
+++++
+\begin{align}
+\Sigma_{\text{letter}} &= \{a, b, \ldots, z, A, B, \ldots, Z\} \\
+\Sigma_{\text{digit}} &= \{0, 1, \ldots, 9\} \\
+\Sigma_{\text{ws}} &= \{\text{SPACE}, \text{TAB}, \text{CR}, \text{LF}\} \\
+\Sigma_{\text{symbol}} &= \{+, -, *, /, <, >, =, !, \&, |, \ldots\}
+\end{align}
+++++
+
+=== 1.2 Token Categories
+
+==== 1.2.1 Keywords
+
+[source,ebnf]
+----
+KEYWORD ::=
+    (* Program Structure *)
+    | "program" | "element" | "sequence" | "transition"
+    | "pattern" | "import" | "export" | "from"
+
+    (* Control Flow *)
+    | "if" | "else" | "match" | "when" | "repeat" | "for" | "while"
+
+    (* Skating Elements - Jumps *)
+    | "axel" | "salchow" | "toe_loop" | "loop" | "flip" | "lutz"
+    | "walley" | "euler" | "half_loop"
+
+    (* Skating Elements - Spins *)
+    | "upright" | "sit" | "camel" | "layback" | "biellmann"
+    | "spin" | "flying" | "combination"
+
+    (* Skating Elements - Steps *)
+    | "step_sequence" | "choreographic_sequence"
+    | "bracket" | "rocker" | "counter" | "twizzle" | "choctaw" | "mohawk"
+
+    (* Skating Elements - Lifts (Pairs/Dance) *)
+    | "lift" | "throw" | "twist" | "death_spiral" | "pair_spin"
+
+    (* Temporal *)
+    | "at" | "duration" | "tempo" | "beat" | "measure" | "sync"
+
+    (* Spatial *)
+    | "position" | "path" | "curve" | "edge" | "direction"
+
+    (* Modifiers *)
+    | "clockwise" | "counter_clockwise" | "forward" | "backward"
+    | "inside" | "outside" | "left" | "right"
+
+    (* ISU Specific *)
+    | "base_value" | "goe" | "level" | "bonus"
+
+    (* Types *)
+    | "int" | "float" | "time" | "angle" | "position" | "velocity"
+    | "element_type" | "edge_type" | "rotation_type"
+----
+
+==== 1.2.2 Identifiers
+
+[source,ebnf]
+----
+IDENTIFIER ::= LETTER (LETTER | DIGIT | "_")*
+
+LETTER ::= "a" | ... | "z" | "A" | ... | "Z" | "_"
+DIGIT  ::= "0" | ... | "9"
+----
+
+**Constraint:** Identifiers must not be keywords.
+
+==== 1.2.3 Literals
+
+[source,ebnf]
+----
+INTEGER_LITERAL ::= DIGIT+
+                  | "0x" HEX_DIGIT+
+                  | "0b" BIN_DIGIT+
+                  | "0o" OCT_DIGIT+
+
+FLOAT_LITERAL ::= DIGIT+ "." DIGIT+ EXPONENT?
+                | DIGIT+ EXPONENT
+
+EXPONENT ::= ("e" | "E") ("+" | "-")? DIGIT+
+
+TIME_LITERAL ::= DIGIT+ ":" DIGIT+ (":" DIGIT+)? ("." DIGIT+)?
+               (* mm:ss or hh:mm:ss with optional milliseconds *)
+
+ANGLE_LITERAL ::= FLOAT_LITERAL ("°" | "deg" | "rad")
+
+STRING_LITERAL ::= '"' (ESCAPE_SEQ | [^"\\])* '"'
+                 | "'" (ESCAPE_SEQ | [^'\\])* "'"
+
+ESCAPE_SEQ ::= "\\" ("n" | "r" | "t" | "\\" | '"' | "'")
+----
+
+==== 1.2.4 Comments
+
+[source,ebnf]
+----
+LINE_COMMENT  ::= "//" [^\n]* "\n"
+BLOCK_COMMENT ::= "/*" ([^*] | "*" [^/])* "*/"
+DOC_COMMENT   ::= "///" [^\n]* "\n"
+                | "/**" ([^*] | "*" [^/])* "*/"
+----
+
+== 2. Syntactic Grammar (EBNF)
+
+=== 2.1 Program Structure
+
+[source,ebnf]
+----
+program ::=
+    program_header
+    import_section?
+    declaration*
+    choreography_block+
+
+program_header ::=
+    "program" IDENTIFIER
+    program_metadata?
+    ";"
+
+program_metadata ::=
+    "(" metadata_entry ("," metadata_entry)* ")"
+
+metadata_entry ::=
+    IDENTIFIER ":" literal_expression
+
+import_section ::=
+    import_statement+
+
+import_statement ::=
+    "import" import_path ("as" IDENTIFIER)?
+    | "from" import_path "import" import_list
+
+import_path ::=
+    IDENTIFIER ("/" IDENTIFIER)*
+    | STRING_LITERAL
+
+import_list ::=
+    IDENTIFIER ("," IDENTIFIER)*
+    | "*"
+----
+
+=== 2.2 Declarations
+
+[source,ebnf]
+----
+declaration ::=
+    element_declaration
+    | pattern_declaration
+    | sequence_declaration
+    | transition_declaration
+    | constant_declaration
+    | type_declaration
+
+element_declaration ::=
+    "element" IDENTIFIER
+    type_parameters?
+    element_parameters
+    element_body
+
+element_parameters ::=
+    "(" parameter_list? ")"
+
+parameter_list ::=
+    parameter ("," parameter)*
+
+parameter ::=
+    IDENTIFIER ":" type_expression ("=" expression)?
+
+element_body ::=
+    "{" element_property* "}"
+
+element_property ::=
+    property_name ":" expression ";"
+
+property_name ::=
+    "base_value" | "duration" | "entry_edge" | "exit_edge"
+    | "rotation" | "position" | "level" | IDENTIFIER
+
+pattern_declaration ::=
+    "pattern" IDENTIFIER
+    type_parameters?
+    "(" parameter_list? ")"
+    "->" type_expression
+    pattern_body
+
+pattern_body ::=
+    "{" statement* "}"
+    | "=" expression ";"
+
+sequence_declaration ::=
+    "sequence" IDENTIFIER
+    sequence_metadata?
+    "{" choreography_statement* "}"
+
+sequence_metadata ::=
+    "(" metadata_entry ("," metadata_entry)* ")"
+
+transition_declaration ::=
+    "transition" IDENTIFIER
+    "from" type_expression
+    "to" type_expression
+    transition_body
+
+transition_body ::=
+    "{" transition_property* "}"
+
+transition_property ::=
+    "path" ":" path_expression ";"
+    | "duration" ":" time_expression ";"
+    | "edge" ":" edge_expression ";"
+    | IDENTIFIER ":" expression ";"
+
+constant_declaration ::=
+    "const" IDENTIFIER (":" type_expression)? "=" expression ";"
+
+type_declaration ::=
+    "type" IDENTIFIER type_parameters? "=" type_expression ";"
+----
+
+=== 2.3 Choreography Blocks
+
+[source,ebnf]
+----
+choreography_block ::=
+    "choreography" IDENTIFIER?
+    choreography_metadata?
+    "{" choreography_statement* "}"
+
+choreography_metadata ::=
+    "("
+        ("music" ":" STRING_LITERAL ",")?
+        ("duration" ":" time_expression ",")?
+        ("tempo" ":" INTEGER_LITERAL ",")?
+        ("skater" ":" IDENTIFIER ("," IDENTIFIER)* ",")?
+        metadata_entry*
+    ")"
+
+choreography_statement ::=
+    element_invocation
+    | sequence_invocation
+    | transition_invocation
+    | temporal_block
+    | spatial_block
+    | control_statement
+    | annotation
+
+element_invocation ::=
+    element_reference
+    temporal_qualifier?
+    spatial_qualifier?
+    ";"
+
+element_reference ::=
+    jump_element
+    | spin_element
+    | step_element
+    | lift_element
+    | custom_element
+
+jump_element ::=
+    jump_type rotation_count? modifiers?
+
+jump_type ::=
+    "axel" | "salchow" | "toe_loop" | "loop" | "flip" | "lutz"
+    | "walley" | "euler" | "half_loop"
+
+rotation_count ::=
+    INTEGER_LITERAL
+    | "single" | "double" | "triple" | "quad"
+
+spin_element ::=
+    spin_modifiers? spin_type spin_position* level_indicator?
+
+spin_modifiers ::=
+    "flying"? ("change" | "combination")?
+
+spin_type ::=
+    "upright" | "sit" | "camel" | "layback" | "biellmann"
+
+spin_position ::=
+    "(" spin_type duration_spec? ")"
+
+level_indicator ::=
+    "level" ("1" | "2" | "3" | "4" | "B")
+
+step_element ::=
+    step_sequence_type step_pattern? level_indicator?
+
+step_sequence_type ::=
+    "step_sequence" | "choreographic_sequence"
+
+step_pattern ::=
+    "{" step_move ("," step_move)* "}"
+
+step_move ::=
+    "bracket" | "rocker" | "counter" | "twizzle"
+    | "choctaw" | "mohawk" | "three_turn" | "loop"
+
+lift_element ::=
+    lift_type lift_group? duration_spec? level_indicator?
+
+lift_type ::=
+    "lift" | "throw" | "twist" | "death_spiral" | "pair_spin"
+
+lift_group ::=
+    "group" ("1" | "2" | "3" | "4" | "5")
+
+custom_element ::=
+    IDENTIFIER "(" argument_list? ")"
+
+modifiers ::=
+    "<<" modifier_list ">>"
+
+modifier_list ::=
+    modifier ("," modifier)*
+
+modifier ::=
+    direction_modifier
+    | edge_modifier
+    | rotation_modifier
+    | arm_modifier
+    | IDENTIFIER
+
+direction_modifier ::=
+    "forward" | "backward"
+
+edge_modifier ::=
+    "inside" | "outside" | "flat"
+
+rotation_modifier ::=
+    "clockwise" | "counter_clockwise"
+
+temporal_qualifier ::=
+    "at" time_expression
+    | "duration" time_expression
+    | "sync" beat_expression
+
+spatial_qualifier ::=
+    "at" position_expression
+    | "path" path_expression
+----
+
+=== 2.4 Temporal Constructs
+
+[source,ebnf]
+----
+temporal_block ::=
+    "at" time_expression "{" choreography_statement* "}"
+    | "sync" beat_expression "{" choreography_statement* "}"
+    | "parallel" "{" temporal_lane+ "}"
+
+temporal_lane ::=
+    "lane" IDENTIFIER? "{" choreography_statement* "}"
+
+time_expression ::=
+    TIME_LITERAL
+    | time_arithmetic
+    | time_reference
+
+time_arithmetic ::=
+    time_expression ("+" | "-") time_expression
+    | time_expression ("*" | "/") numeric_expression
+
+time_reference ::=
+    "start" | "end" | "now"
+    | IDENTIFIER ".start"
+    | IDENTIFIER ".end"
+    | IDENTIFIER ".duration"
+
+beat_expression ::=
+    "beat" INTEGER_LITERAL
+    | "measure" INTEGER_LITERAL ("." INTEGER_LITERAL)?
+    | "downbeat"
+    | beat_arithmetic
+
+beat_arithmetic ::=
+    beat_expression ("+" | "-") INTEGER_LITERAL
+
+duration_spec ::=
+    "for" time_expression
+    | "until" time_expression
+    | "beats" INTEGER_LITERAL
+----
+
+=== 2.5 Spatial Constructs
+
+[source,ebnf]
+----
+spatial_block ::=
+    "at" position_expression "{" choreography_statement* "}"
+    | "path" path_expression "{" choreography_statement* "}"
+    | "region" region_expression "{" choreography_statement* "}"
+
+position_expression ::=
+    coordinate_literal
+    | named_position
+    | position_arithmetic
+
+coordinate_literal ::=
+    "(" numeric_expression "," numeric_expression ")"
+    | "(" numeric_expression "," numeric_expression "," numeric_expression ")"
+
+named_position ::=
+    "center" | "long_axis" | "short_axis"
+    | "corner" corner_id
+    | "judges"
+    | "kiss_and_cry"
+    | IDENTIFIER
+
+corner_id ::=
+    "NE" | "NW" | "SE" | "SW"
+    | INTEGER_LITERAL
+
+position_arithmetic ::=
+    position_expression ("+" | "-") vector_expression
+    | position_expression "offset" vector_expression
+
+vector_expression ::=
+    "(" numeric_expression "," numeric_expression ")"
+    | "polar" "(" numeric_expression "," angle_expression ")"
+    | direction_vector
+
+direction_vector ::=
+    "north" | "south" | "east" | "west"
+    | "along_axis" | "across_axis"
+
+path_expression ::=
+    path_literal
+    | path_constructor
+    | path_operation
+
+path_literal ::=
+    "[" path_point ("," path_point)* "]"
+
+path_point ::=
+    position_expression edge_annotation?
+
+edge_annotation ::=
+    "@" edge_type
+
+edge_type ::=
+    "LFO" | "LFI" | "LBO" | "LBI"
+    | "RFO" | "RFI" | "RBO" | "RBI"
+    | edge_expression
+
+path_constructor ::=
+    "line" "(" position_expression "," position_expression ")"
+    | "arc" "(" position_expression "," position_expression "," curvature ")"
+    | "circle" "(" position_expression "," numeric_expression ")"
+    | "spiral" "(" position_expression "," spiral_params ")"
+    | "bezier" "(" control_points ")"
+    | "serpentine" "(" path_expression "," numeric_expression ")"
+
+curvature ::=
+    "left" | "right"
+    | angle_expression
+
+spiral_params ::=
+    "(" numeric_expression "," numeric_expression "," numeric_expression ")"
+    (* start_radius, end_radius, rotations *)
+
+control_points ::=
+    position_expression ("," position_expression)+
+
+path_operation ::=
+    path_expression "+" path_expression     (* concatenation *)
+    | path_expression "reverse"              (* reverse direction *)
+    | path_expression "mirror" axis          (* mirror across axis *)
+    | path_expression "scale" numeric_expression
+    | path_expression "rotate" angle_expression
+    | path_expression "translate" vector_expression
+
+axis ::=
+    "x" | "y" | "long" | "short" | angle_expression
+
+region_expression ::=
+    "rect" "(" position_expression "," position_expression ")"
+    | "circle" "(" position_expression "," numeric_expression ")"
+    | "polygon" "(" position_expression ("," position_expression)+ ")"
+    | "rink"
+    | IDENTIFIER
+----
+
+=== 2.6 Expressions
+
+[source,ebnf]
+----
+expression ::=
+    conditional_expression
+
+conditional_expression ::=
+    logical_or_expression
+    | logical_or_expression "?" expression ":" expression
+
+logical_or_expression ::=
+    logical_and_expression ("||" logical_and_expression)*
+
+logical_and_expression ::=
+    equality_expression ("&&" equality_expression)*
+
+equality_expression ::=
+    relational_expression (("==" | "!=") relational_expression)*
+
+relational_expression ::=
+    additive_expression (("<" | ">" | "<=" | ">=") additive_expression)*
+
+additive_expression ::=
+    multiplicative_expression (("+" | "-") multiplicative_expression)*
+
+multiplicative_expression ::=
+    unary_expression (("*" | "/" | "%") unary_expression)*
+
+unary_expression ::=
+    ("!" | "-" | "+") unary_expression
+    | postfix_expression
+
+postfix_expression ::=
+    primary_expression postfix_operator*
+
+postfix_operator ::=
+    "(" argument_list? ")"      (* function call *)
+    | "[" expression "]"         (* index *)
+    | "." IDENTIFIER             (* member access *)
+    | "++" | "--"
+
+primary_expression ::=
+    literal_expression
+    | IDENTIFIER
+    | "(" expression ")"
+    | lambda_expression
+
+literal_expression ::=
+    INTEGER_LITERAL
+    | FLOAT_LITERAL
+    | TIME_LITERAL
+    | ANGLE_LITERAL
+    | STRING_LITERAL
+    | "true" | "false"
+    | "null"
+
+lambda_expression ::=
+    "|" parameter_list? "|" expression
+    | "|" parameter_list? "|" "{" statement* "}"
+
+argument_list ::=
+    argument ("," argument)*
+
+argument ::=
+    expression
+    | IDENTIFIER ":" expression   (* named argument *)
+
+numeric_expression ::=
+    expression (* where type is numeric *)
+
+angle_expression ::=
+    ANGLE_LITERAL
+    | numeric_expression ("°" | "deg" | "rad")
+    | expression (* where type is angle *)
+----
+
+=== 2.7 Type Expressions
+
+[source,ebnf]
+----
+type_expression ::=
+    primary_type
+    | generic_type
+    | function_type
+    | tuple_type
+    | union_type
+
+primary_type ::=
+    "int" | "float" | "bool" | "string"
+    | "time" | "duration" | "tempo"
+    | "angle" | "rotation"
+    | "position" | "position2d" | "position3d"
+    | "velocity" | "acceleration"
+    | "path" | "curve" | "edge"
+    | "element" | "jump" | "spin" | "step" | "lift"
+    | "sequence" | "pattern" | "transition"
+    | "skater" | "pair" | "team"
+    | "unit"    (* void/unit type *)
+    | IDENTIFIER
+
+generic_type ::=
+    IDENTIFIER "<" type_argument_list ">"
+
+type_argument_list ::=
+    type_expression ("," type_expression)*
+
+function_type ::=
+    "(" type_list? ")" "->" type_expression
+
+type_list ::=
+    type_expression ("," type_expression)*
+
+tuple_type ::=
+    "(" type_expression "," type_expression ("," type_expression)* ")"
+
+union_type ::=
+    type_expression ("|" type_expression)+
+
+type_parameters ::=
+    "<" type_parameter ("," type_parameter)* ">"
+
+type_parameter ::=
+    IDENTIFIER (":" type_constraint)?
+
+type_constraint ::=
+    type_expression
+    | type_expression ("+" type_expression)+
+----
+
+=== 2.8 Control Statements
+
+[source,ebnf]
+----
+control_statement ::=
+    if_statement
+    | match_statement
+    | loop_statement
+    | return_statement
+    | break_statement
+    | continue_statement
+
+if_statement ::=
+    "if" expression "{" choreography_statement* "}"
+    ("else" "if" expression "{" choreography_statement* "}")*
+    ("else" "{" choreography_statement* "}")?
+
+match_statement ::=
+    "match" expression "{"
+        match_arm+
+    "}"
+
+match_arm ::=
+    pattern "=>" (expression ";" | "{" choreography_statement* "}")
+
+pattern ::=
+    literal_expression
+    | IDENTIFIER
+    | constructor_pattern
+    | wildcard_pattern
+
+constructor_pattern ::=
+    IDENTIFIER "(" pattern ("," pattern)* ")"
+
+wildcard_pattern ::=
+    "_"
+
+loop_statement ::=
+    "repeat" expression "{" choreography_statement* "}"
+    | "for" IDENTIFIER "in" expression "{" choreography_statement* "}"
+    | "while" expression "{" choreography_statement* "}"
+
+return_statement ::=
+    "return" expression? ";"
+
+break_statement ::=
+    "break" IDENTIFIER? ";"
+
+continue_statement ::=
+    "continue" IDENTIFIER? ";"
+----
+
+=== 2.9 Annotations
+
+[source,ebnf]
+----
+annotation ::=
+    "@" annotation_name annotation_arguments?
+
+annotation_name ::=
+    IDENTIFIER ("." IDENTIFIER)*
+
+annotation_arguments ::=
+    "(" (annotation_arg ("," annotation_arg)*)? ")"
+
+annotation_arg ::=
+    expression
+    | IDENTIFIER "=" expression
+----
+
+== 3. Grammar Properties
+
+=== 3.1 Disambiguation Rules
+
+. **Longest Match**: Lexer follows longest match principle
+. **Keyword Priority**: Keywords take precedence over identifiers
+. **Operator Precedence**: Standard mathematical precedence (see §3.2)
+. **Dangling Else**: Resolved by nearest-if binding
+. **Path vs Array**: `[...]` after identifier is indexing; standalone is path literal
+
+=== 3.2 Operator Precedence (Highest to Lowest)
+
+[cols="1,3,1"]
+|===
+|Level |Operators |Associativity
+
+|1 |`.` `()` `[]` |Left
+|2 |`++` `--` (postfix) |Left
+|3 |`!` `-` `+` (unary) |Right
+|4 |`*` `/` `%` |Left
+|5 |`+` `-` |Left
+|6 |`<` `>` `\<=` `>=` |Left
+|7 |`==` `!=` |Left
+|8 |`&&` |Left
+|9 |`\|\|` |Left
+|10 |`?:` (ternary) |Right
+|11 |`=` `+=` `-=` etc. |Right
+|===
+
+=== 3.3 Context-Free Property
+
+**Theorem 3.1** (Context-Free Grammar): _The Anvomidav grammar is context-free (Type 2 in the Chomsky hierarchy)._
+
+**Proof sketch**: All production rules are of the form A → α where A is a single non-terminal and α is a string of terminals and non-terminals. No production requires examination of surrounding context to determine the correct parse.
+
+However, semantic analysis requires context-sensitive checks:
+
+* Identifier resolution (scope checking)
+* Type compatibility verification
+* ISU rule validation
+* Temporal constraint satisfaction
+
+These are handled in a separate semantic analysis phase.
+
+=== 3.4 Parsing Complexity
+
+**Theorem 3.2** (LL(1) Parseability with Minor Conflicts): _The grammar is nearly LL(1) parseable, with resolvable conflicts requiring LL(2) lookahead in limited cases._
+
+The grammar can be parsed by:
+
+* **LL(k)** parser with k ≤ 2 for most constructs
+* **LALR(1)** parser for complete coverage
+* **PEG** parser with packrat memoization for linear time
+
+== 4. Example Programs
+
+=== 4.1 Simple Jump Sequence
+
+[source,anvomidav]
+----
+program triple_triple_combo(
+    title: "Triple-Triple Combination",
+    author: "Example Choreographer",
+    date: "2025-01-01"
+);
+
+choreography main(
+    music: "Swan Lake",
+    duration: 0:30
+) {
+    // Triple Lutz - Triple Toe combination
+    triple lutz << backward, outside >> at 0:05;
+    euler at 0:07;
+    triple toe_loop << forward >> at 0:08;
+}
+----
+
+=== 4.2 Spin Combination with Levels
+
+[source,anvomidav]
+----
+program combination_spin;
+
+element my_combo_spin {
+    base_value: 3.50;
+    duration: 0:12;
+}
+
+choreography main {
+    flying camel (camel for 0:03, sit for 0:03, upright for 0:03)
+        level 4
+        at center;
+}
+----
+
+== 5. TODO: Incomplete Specifications
+
+[WARNING]
+====
+The following areas require further specification:
+
+* [ ] **§2.3.5** - Full lift group taxonomy per ISU regulations
+* [ ] **§2.4** - Precise tempo synchronization semantics
+* [ ] **§2.5** - 3D coordinate system for jump height modeling
+* [ ] **§3.4** - Formal proof of LALR(1) parseability
+* [ ] **Appendix A** - Complete keyword enumeration with ISU mappings
+* [ ] **Appendix B** - Unicode support for international element names
+* [ ] **Appendix C** - Grammar test suite and conformance tests
+====
+
+== 6. References
+
+1. International Skating Union. _ISU Special Regulations & Technical Rules Single & Pair Skating and Ice Dance_. ISU, 2024.
+2. Aho, A. V., Lam, M. S., Sethi, R., & Ullman, J. D. _Compilers: Principles, Techniques, and Tools_ (2nd ed.). Pearson, 2006.
+3. Parr, T. _The Definitive ANTLR 4 Reference_. Pragmatic Bookshelf, 2013.
+4. Pierce, B. C. _Types and Programming Languages_. MIT Press, 2002.
+
+---
+
+_Document Version: 0.1.0-draft_
+_Last Updated: 2025-01-01_

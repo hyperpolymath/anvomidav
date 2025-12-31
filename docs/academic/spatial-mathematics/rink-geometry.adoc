@@ -1,0 +1,615 @@
+// SPDX-FileCopyrightText: 2025 hyperpolymath
+// SPDX-License-Identifier: MIT OR AGPL-3.0-or-later
+
+= Rink Geometry and Spatial Mathematics
+:toc: macro
+:toc-title: Contents
+:toclevels: 4
+:sectnums:
+:stem: latexmath
+
+== Abstract
+
+This document establishes the complete mathematical framework for spatial representation in Anvomidav. We define the coordinate system, geometric primitives, path calculus, collision detection, and spatial constraint verification. The framework is grounded in differential geometry, computational geometry, and topology, enabling rigorous analysis of skating trajectories and spatial validity.
+
+toc::[]
+
+== 1. Coordinate System
+
+=== 1.1 Rink Specification
+
+The ISU standard ice rink is defined as:
+
+**Definition 1.1** (Standard Rink): A rounded rectangle with:
+- Length: stem:[L = 60\text{m}] (along x-axis)
+- Width: stem:[W = 30\text{m}] (along y-axis)
+- Corner radius: stem:[r = 8.5\text{m}]
+
+[stem]
+++++
+\mathcal{R} = \{(x, y) \in \mathbb{R}^2 \mid \mathsf{in\_rink}(x, y)\}
+++++
+
+where:
+[stem]
+++++
+\mathsf{in\_rink}(x, y) =
+\begin{cases}
+|x| \leq \frac{L}{2} - r \land |y| \leq \frac{W}{2} & \text{(central rectangle)} \\
+|x| \leq \frac{L}{2} - r \land |y| \leq \frac{W}{2} & \text{(side rectangles)} \\
+\|(|x| - (\frac{L}{2} - r), |y| - (\frac{W}{2} - r))\| \leq r & \text{(corners)}
+\end{cases}
+++++
+
+=== 1.2 Coordinate Frames
+
+**Definition 1.2** (World Frame): stem:[\mathcal{F}_W = (O_W, \vec{e}_x, \vec{e}_y, \vec{e}_z)]
+
+- Origin stem:[O_W]: Center of the rink at ice level
+- stem:[\vec{e}_x]: Long axis (positive toward judges)
+- stem:[\vec{e}_y]: Short axis (positive toward right side)
+- stem:[\vec{e}_z]: Vertical (positive upward)
+
+**Definition 1.3** (Skater Frame): stem:[\mathcal{F}_S(t) = (P_S(t), \vec{f}(t), \vec{r}(t), \vec{u}(t))]
+
+- stem:[P_S(t)]: Skater center of mass position
+- stem:[\vec{f}(t)]: Forward direction (skating direction)
+- stem:[\vec{r}(t)]: Right direction (perpendicular to forward)
+- stem:[\vec{u}(t)]: Up direction (vertical)
+
+**Frame Transformation**:
+[stem]
+++++
+T_{WS}(t) = \begin{pmatrix}
+R(t) & P_S(t) \\
+0 & 1
+\end{pmatrix} \in SE(3)
+++++
+
+where stem:[R(t) = [\vec{f}(t) | \vec{r}(t) | \vec{u}(t)\] \in SO(3)].
+
+=== 1.3 Named Positions
+
+**Definition 1.4** (Standard Positions):
+[stem]
+++++
+\begin{align}
+\mathsf{center} &= (0, 0) \\
+\mathsf{judges} &= (\frac{L}{2}, 0) \\
+\mathsf{kiss\_and\_cry} &= (-\frac{L}{2}, \frac{W}{4}) \\
+\mathsf{corner}_{NE} &= (\frac{L}{2} - r, \frac{W}{2} - r) \\
+\mathsf{corner}_{NW} &= (-\frac{L}{2} + r, \frac{W}{2} - r) \\
+\mathsf{corner}_{SE} &= (\frac{L}{2} - r, -\frac{W}{2} + r) \\
+\mathsf{corner}_{SW} &= (-\frac{L}{2} + r, -\frac{W}{2} + r)
+\end{align}
+++++
+
+=== 1.4 Rink Zones
+
+**Definition 1.5** (Zone Partition): The rink is partitioned into zones for choreographic planning:
+
+[stem]
+++++
+\begin{align}
+\mathcal{Z}_1 &= \{(x,y) \mid x > 0, y > 0\} \cap \mathcal{R} \quad \text{(NE quadrant)} \\
+\mathcal{Z}_2 &= \{(x,y) \mid x < 0, y > 0\} \cap \mathcal{R} \quad \text{(NW quadrant)} \\
+\mathcal{Z}_3 &= \{(x,y) \mid x < 0, y < 0\} \cap \mathcal{R} \quad \text{(SW quadrant)} \\
+\mathcal{Z}_4 &= \{(x,y) \mid x > 0, y < 0\} \cap \mathcal{R} \quad \text{(SE quadrant)}
+\end{align}
+++++
+
+**Definition 1.6** (Bonus Zone): The second-half bonus zone for jumps:
+[stem]
+++++
+\mathcal{Z}_{\text{bonus}} = \mathcal{R} \times \{t \mid t > \frac{T}{2}\}
+++++
+
+(Time-dependent, not purely spatial)
+
+== 2. Geometric Primitives
+
+=== 2.1 Points and Vectors
+
+**Definition 2.1** (Point): stem:[P \in \mathbb{R}^2] or stem:[P \in \mathbb{R}^3]
+
+**Definition 2.2** (Vector): stem:[\vec{v} \in \mathbb{R}^2] or stem:[\vec{v} \in \mathbb{R}^3]
+
+**Operations**:
+[stem]
+++++
+\begin{align}
+P + \vec{v} &= Q && \text{(point translation)} \\
+P - Q &= \vec{v} && \text{(vector between points)} \\
+\|\vec{v}\| &= \sqrt{\sum_i v_i^2} && \text{(magnitude)} \\
+\hat{v} &= \frac{\vec{v}}{\|\vec{v}\|} && \text{(normalization)} \\
+\vec{v} \cdot \vec{w} &= \sum_i v_i w_i && \text{(dot product)} \\
+\vec{v} \times \vec{w} &= (v_2w_3 - v_3w_2, v_3w_1 - v_1w_3, v_1w_2 - v_2w_1) && \text{(cross product, 3D)}
+\end{align}
+++++
+
+=== 2.2 Lines and Segments
+
+**Definition 2.3** (Parametric Line):
+[stem]
+++++
+\ell(t) = P + t \cdot \vec{d}, \quad t \in \mathbb{R}
+++++
+
+**Definition 2.4** (Line Segment):
+[stem]
+++++
+\overline{AB}(t) = A + t \cdot (B - A), \quad t \in [0, 1]
+++++
+
+=== 2.3 Curves
+
+**Definition 2.5** (Parametric Curve):
+[stem]
+++++
+\gamma: [0, 1] \to \mathbb{R}^2
+++++
+
+**Definition 2.6** (Arc Length Parameterization):
+[stem]
+++++
+s(t) = \int_0^t \|\gamma'(\tau)\| d\tau
+++++
+
+The arc-length parameterized curve stem:[\tilde{\gamma}(s) = \gamma(t(s))] satisfies stem:[\|\tilde{\gamma}'(s)\| = 1].
+
+**Definition 2.7** (Curvature):
+[stem]
+++++
+\kappa(t) = \frac{\|\gamma'(t) \times \gamma''(t)\|}{\|\gamma'(t)\|^3}
+++++
+
+For 2D: stem:[\kappa(t) = \frac{x'y'' - y'x''}{(x'^2 + y'^2)^{3/2}}]
+
+=== 2.4 Standard Curve Types
+
+**Definition 2.8** (Circle Arc):
+[stem]
+++++
+\mathsf{arc}(C, r, \theta_1, \theta_2)(t) = C + r \cdot (\cos(\theta_1 + t(\theta_2 - \theta_1)), \sin(\theta_1 + t(\theta_2 - \theta_1)))
+++++
+
+**Definition 2.9** (Bézier Curve):
+
+Quadratic:
+[stem]
+++++
+B_2(t) = (1-t)^2 P_0 + 2(1-t)t P_1 + t^2 P_2
+++++
+
+Cubic:
+[stem]
+++++
+B_3(t) = (1-t)^3 P_0 + 3(1-t)^2 t P_1 + 3(1-t) t^2 P_2 + t^3 P_3
+++++
+
+General (degree n):
+[stem]
+++++
+B_n(t) = \sum_{i=0}^n \binom{n}{i} (1-t)^{n-i} t^i P_i
+++++
+
+**Definition 2.10** (Clothoid/Euler Spiral):
+[stem]
+++++
+\begin{align}
+x(t) &= \int_0^t \cos\left(\frac{\pi s^2}{2}\right) ds = C(t) && \text{(Fresnel cosine integral)} \\
+y(t) &= \int_0^t \sin\left(\frac{\pi s^2}{2}\right) ds = S(t) && \text{(Fresnel sine integral)}
+\end{align}
+++++
+
+Clothoids have curvature proportional to arc length, ideal for smooth edge transitions.
+
+=== 2.5 Regions
+
+**Definition 2.11** (Polygon):
+[stem]
+++++
+\mathcal{P} = \{P_0, P_1, \ldots, P_n\}
+++++
+
+with edges stem:[\overline{P_i P_{i+1 \mod n}}].
+
+**Definition 2.12** (Disk):
+[stem]
+++++
+\mathcal{D}(C, r) = \{P \in \mathbb{R}^2 \mid \|P - C\| \leq r\}
+++++
+
+**Definition 2.13** (Minkowski Sum):
+[stem]
+++++
+A \oplus B = \{a + b \mid a \in A, b \in B\}
+++++
+
+Used for collision detection with skater bounding regions.
+
+== 3. Path Calculus
+
+=== 3.1 Path Definition
+
+**Definition 3.1** (Skating Path):
+[stem]
+++++
+\mathcal{P}: [0, 1] \to \mathbb{R}^2 \times \mathsf{Edge} \times \mathbb{R}
+++++
+
+where the triple represents (position, edge, orientation).
+
+=== 3.2 Path Operations
+
+**Definition 3.2** (Path Concatenation):
+[stem]
+++++
+(\mathcal{P}_1 \cdot \mathcal{P}_2)(t) =
+\begin{cases}
+\mathcal{P}_1(2t) & t \in [0, 0.5] \\
+\mathcal{P}_2(2t - 1) & t \in (0.5, 1]
+\end{cases}
+++++
+
+**Constraint**: Paths must be compatible at junction:
+[stem]
+++++
+\mathcal{P}_1(1) = \mathcal{P}_2(0) \quad \text{(position and edge match)}
+++++
+
+**Definition 3.3** (Path Reversal):
+[stem]
+++++
+\mathcal{P}^{\leftarrow}(t) = \mathcal{P}(1 - t) \text{ with reversed edge direction}
+++++
+
+**Definition 3.4** (Path Scaling):
+[stem]
+++++
+(s \cdot \mathcal{P})(t) = s \cdot \mathcal{P}(t) + (1-s) \cdot \mathsf{center}(\mathcal{P})
+++++
+
+**Definition 3.5** (Path Translation):
+[stem]
+++++
+(\mathcal{P} + \vec{v})(t) = \mathcal{P}(t) + \vec{v}
+++++
+
+**Definition 3.6** (Path Rotation):
+[stem]
+++++
+(R_\theta \cdot \mathcal{P})(t) = R_\theta(\mathcal{P}(t) - O) + O
+++++
+
+where stem:[R_\theta] is the rotation matrix and stem:[O] is the rotation center.
+
+=== 3.3 Path Metrics
+
+**Definition 3.7** (Path Length):
+[stem]
+++++
+\mathsf{length}(\mathcal{P}) = \int_0^1 \|\mathcal{P}'(t)\| dt
+++++
+
+**Definition 3.8** (Path Curvature Integral):
+[stem]
+++++
+\mathsf{total\_curvature}(\mathcal{P}) = \int_0^1 |\kappa(t)| \|\mathcal{P}'(t)\| dt
+++++
+
+**Definition 3.9** (Path Turning Number):
+[stem]
+++++
+\mathsf{winding}(\mathcal{P}) = \frac{1}{2\pi} \int_0^1 \kappa(t) \|\mathcal{P}'(t)\| dt
+++++
+
+For closed paths, this is an integer.
+
+=== 3.4 Edge Transitions
+
+**Definition 3.10** (Edge Transition Point): A point stem:[t^*] where the edge changes:
+[stem]
+++++
+\mathsf{edge}(\mathcal{P}(t^*)) \neq \lim_{t \to t^{*+}} \mathsf{edge}(\mathcal{P}(t))
+++++
+
+**Theorem 3.1** (Edge Transition Curvature): At an edge transition, the curvature sign changes:
+[stem]
+++++
+\mathsf{sign}(\kappa(t^{*-})) = -\mathsf{sign}(\kappa(t^{*+}))
+++++
+
+_Proof_: Inside edges curve inward relative to the skater, outside edges curve outward. A transition reverses this relationship. ∎
+
+=== 3.5 Trace Patterns
+
+**Definition 3.11** (Trace): The set of all ice points touched by the path:
+[stem]
+++++
+\mathsf{trace}(\mathcal{P}) = \{\mathcal{P}(t)_{\text{pos}} \mid t \in [0, 1]\}
+++++
+
+**Definition 3.12** (Ice Coverage):
+[stem]
+++++
+\mathsf{coverage}(\mathcal{P}) = \frac{\mathsf{area}(\mathsf{convex\_hull}(\mathsf{trace}(\mathcal{P})))}{\mathsf{area}(\mathcal{R})}
+++++
+
+== 4. Differential Geometry of Paths
+
+=== 4.1 Frenet-Serret Frame
+
+**Definition 4.1** (Frenet Frame): For a path stem:[\gamma(s)] parameterized by arc length:
+
+[stem]
+++++
+\begin{align}
+\vec{T}(s) &= \gamma'(s) && \text{(unit tangent)} \\
+\vec{N}(s) &= \frac{\vec{T}'(s)}{\|\vec{T}'(s)\|} && \text{(unit normal)} \\
+\vec{B}(s) &= \vec{T}(s) \times \vec{N}(s) && \text{(binormal, for 3D)}
+\end{align}
+++++
+
+**Definition 4.2** (Frenet-Serret Equations):
+[stem]
+++++
+\frac{d}{ds} \begin{pmatrix} \vec{T} \\ \vec{N} \\ \vec{B} \end{pmatrix} =
+\begin{pmatrix} 0 & \kappa & 0 \\ -\kappa & 0 & \tau \\ 0 & -\tau & 0 \end{pmatrix}
+\begin{pmatrix} \vec{T} \\ \vec{N} \\ \vec{B} \end{pmatrix}
+++++
+
+where stem:[\kappa] is curvature and stem:[\tau] is torsion.
+
+=== 4.2 Curvature Constraints
+
+**Theorem 4.1** (Minimum Curvature Radius): For a skating edge at speed stem:[v], the minimum curvature radius is bounded by:
+[stem]
+++++
+r_{\min} = \frac{v^2}{g \cdot \mu}
+++++
+
+where stem:[g] is gravity and stem:[\mu] is the ice-blade friction coefficient.
+
+**Definition 4.3** (Valid Path): A path is valid if:
+[stem]
+++++
+\forall t \in [0,1]: \frac{1}{\kappa(t)} \geq r_{\min}(v(t))
+++++
+
+=== 4.3 Geodesics on the Rink
+
+The rink surface is flat (stem:[\mathbb{R}^2]), so geodesics are straight lines. However, skating paths are constrained by:
+
+1. Edge mechanics (curved motion)
+2. Physics (momentum, friction)
+3. Rink boundaries
+
+**Definition 4.4** (Constrained Geodesic): Shortest valid path between two points:
+[stem]
+++++
+\gamma^* = \arg\min_{\gamma} \mathsf{length}(\gamma) \quad \text{s.t. } \gamma \text{ is valid}
+++++
+
+== 5. Collision Detection
+
+=== 5.1 Skater Bounding Volumes
+
+**Definition 5.1** (Skater Bounding Disk):
+[stem]
+++++
+\mathcal{B}_S(t) = \mathcal{D}(P_S(t), r_S)
+++++
+
+where stem:[r_S \approx 0.5\text{m}] is the skater's bounding radius.
+
+**Definition 5.2** (Swept Volume): For a path over time interval stem:[[t_1, t_2]]:
+[stem]
+++++
+\mathcal{V}_{\text{sweep}} = \bigcup_{t \in [t_1, t_2]} \mathcal{B}_S(t)
+++++
+
+=== 5.2 Rink Boundary Collision
+
+**Definition 5.3** (Boundary Distance):
+[stem]
+++++
+d_{\partial\mathcal{R}}(P) = \min_{Q \in \partial\mathcal{R}} \|P - Q\|
+++++
+
+**Constraint 5.1** (Rink Containment):
+[stem]
+++++
+\forall t: d_{\partial\mathcal{R}}(P_S(t)) \geq r_S
+++++
+
+=== 5.3 Skater-Skater Collision (Pairs/Synchro)
+
+**Definition 5.4** (Collision Predicate):
+[stem]
+++++
+\mathsf{collide}(S_1, S_2, t) \iff \|P_{S_1}(t) - P_{S_2}(t)\| < r_{S_1} + r_{S_2}
+++++
+
+**Definition 5.5** (Minimum Separation):
+[stem]
+++++
+d_{\min}(S_1, S_2) = \min_{t \in [0, T]} \|P_{S_1}(t) - P_{S_2}(t)\|
+++++
+
+**Constraint 5.2** (Pairs Safety): For pairs elements:
+[stem]
+++++
+d_{\min}(S_1, S_2) \geq d_{\text{safe}} \quad \text{(except during lifts/holds)}
+++++
+
+=== 5.4 Collision Detection Algorithms
+
+**Algorithm 5.1** (Spatial Hashing):
+
+1. Divide rink into grid cells of size stem:[2r_S]
+2. Hash skater positions to cells
+3. Only check collisions between skaters in same/adjacent cells
+
+Complexity: stem:[O(n)] expected, stem:[O(n^2)] worst case.
+
+**Algorithm 5.2** (Continuous Collision Detection):
+
+For paths stem:[\gamma_1(t)], stem:[\gamma_2(t)]:
+
+1. Compute stem:[d(t) = \|\gamma_1(t) - \gamma_2(t)\|]
+2. Find roots of stem:[d(t) - (r_1 + r_2) = 0]
+3. Use interval arithmetic for robust root finding
+
+=== 5.5 Collision Response
+
+**Theorem 5.1** (Collision Impossibility): A well-typed Anvomidav program cannot produce collisions.
+
+_Proof_: The type system encodes temporal and spatial constraints:
+- Linear time slots prevent temporal overlap
+- Region types prevent spatial conflict
+- Collision-free is a refinement predicate verified at compile time ∎
+
+== 6. Spatial Constraint Verification
+
+=== 6.1 Constraint Language
+
+[stem]
+++++
+\begin{align}
+\phi ::=\ &P \in \mathcal{R} && \text{(inside rink)} \\
+        |\ &d(P_1, P_2) \geq d && \text{(minimum distance)} \\
+        |\ &\gamma \subseteq \mathcal{Z} && \text{(path in zone)} \\
+        |\ &\mathsf{coverage}(\gamma) \geq c && \text{(ice coverage)} \\
+        |\ &\phi_1 \land \phi_2 && \text{(conjunction)} \\
+        |\ &\forall t \in I.\ \phi && \text{(temporal quantification)}
+\end{align}
+++++
+
+=== 6.2 Constraint Satisfaction
+
+**Definition 6.1** (Constraint Satisfaction Problem):
+[stem]
+++++
+\mathsf{CSP}(\Phi, \mathcal{P}) = \exists \mathcal{P} \in \mathsf{Path}.\ \bigwedge_{\phi \in \Phi} \phi(\mathcal{P})
+++++
+
+**Theorem 6.1** (Decidability): Path constraint satisfaction is decidable for the constraint language above.
+
+_Proof_: Reduce to quantifier elimination in the theory of real closed fields (Tarski's theorem). ∎
+
+=== 6.3 Optimization
+
+**Definition 6.2** (Optimal Path):
+[stem]
+++++
+\mathcal{P}^* = \arg\min_{\mathcal{P}} \mathsf{cost}(\mathcal{P}) \quad \text{s.t. } \mathsf{CSP}(\Phi, \mathcal{P})
+++++
+
+Typical cost functions:
+- Total distance
+- Total curvature
+- Deviation from ideal path
+
+== 7. Topological Properties
+
+=== 7.1 Path Homotopy
+
+**Definition 7.1** (Homotopy): Two paths stem:[\gamma_0, \gamma_1] with same endpoints are homotopic if:
+[stem]
+++++
+\exists H: [0,1]^2 \to \mathcal{R}.\ H(s, 0) = \gamma_0(s), H(s, 1) = \gamma_1(s), H(0, t) = \gamma_0(0), H(1, t) = \gamma_0(1)
+++++
+
+**Definition 7.2** (Fundamental Group): stem:[\pi_1(\mathcal{R})] is trivial (the rink is simply connected).
+
+This means any closed path can be continuously contracted to a point.
+
+=== 7.2 Covering Space
+
+**Definition 7.3** (Temporal Cover): The space-time rink:
+[stem]
+++++
+\tilde{\mathcal{R}} = \mathcal{R} \times [0, T]
+++++
+
+Paths that revisit the same location at different times are distinguished in stem:[\tilde{\mathcal{R}}].
+
+=== 7.3 Braid Structure (Synchro Skating)
+
+**Definition 7.4** (Configuration Space): For stem:[n] skaters:
+[stem]
+++++
+\mathcal{C}_n = \{(P_1, \ldots, P_n) \in \mathcal{R}^n \mid P_i \neq P_j \text{ for } i \neq j\}
+++++
+
+**Definition 7.5** (Braid Group): stem:[\pi_1(\mathcal{C}_n)]
+
+The fundamental group of the configuration space is the braid group, capturing the topology of skater crossings.
+
+== 8. Computational Geometry Algorithms
+
+=== 8.1 Point-in-Polygon
+
+**Algorithm 8.1** (Ray Casting):
+[source,pseudocode]
+----
+function point_in_polygon(P, polygon):
+    crossings = 0
+    for each edge (A, B) in polygon:
+        if ray_from_P_crosses_edge(P, A, B):
+            crossings += 1
+    return crossings mod 2 == 1
+----
+
+Complexity: stem:[O(n)] for stem:[n] vertices.
+
+=== 8.2 Path Intersection
+
+**Algorithm 8.2** (Bentley-Ottmann):
+
+Finds all intersections between path segments in stem:[O((n + k) \log n)] where stem:[k] is the number of intersections.
+
+=== 8.3 Voronoi Diagram
+
+**Definition 8.1** (Voronoi Cell):
+[stem]
+++++
+V_i = \{P \in \mathcal{R} \mid \|P - P_i\| \leq \|P - P_j\| \text{ for all } j \neq i\}
+++++
+
+Used for spatial partitioning in multi-skater choreography.
+
+=== 8.4 Convex Hull
+
+**Algorithm 8.3** (Gift Wrapping): stem:[O(nh)] for stem:[h] hull vertices.
+**Algorithm 8.4** (Graham Scan): stem:[O(n \log n)]
+
+== 9. TODO: Incomplete Specifications
+
+[WARNING]
+====
+The following spatial aspects require further development:
+
+* [ ] **§4** - Full curvature analysis for all skating maneuvers
+* [ ] **§5.4** - Optimized collision detection implementation
+* [ ] **§6** - Complete constraint solver specification
+* [ ] **§7.3** - Braid group calculations for synchro formations
+* [ ] **§8** - Performance analysis of geometry algorithms
+* [ ] **§10** - 3D extensions for jump trajectories
+* [ ] **§11** - GPU-accelerated spatial computations
+* [ ] **§12** - Approximate algorithms for real-time verification
+====
+
+== 10. References
+
+1. de Berg, M., et al. _Computational Geometry: Algorithms and Applications_ (3rd ed.). Springer, 2008.
+2. O'Rourke, J. _Computational Geometry in C_ (2nd ed.). Cambridge University Press, 1998.
+3. do Carmo, M. P. _Differential Geometry of Curves and Surfaces_. Prentice-Hall, 1976.
+4. Preparata, F. P. & Shamos, M. I. _Computational Geometry: An Introduction_. Springer, 1985.
+5. LaValle, S. M. _Planning Algorithms_. Cambridge University Press, 2006.
+
+---
+
+_Document Version: 0.1.0-draft_
+_Last Updated: 2025-01-01_

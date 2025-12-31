@@ -1,0 +1,545 @@
+// SPDX-FileCopyrightText: 2025 hyperpolymath
+// SPDX-License-Identifier: MIT OR AGPL-3.0-or-later
+
+= Temporal Logic and Music Synchronization
+:toc: macro
+:toc-title: Contents
+:toclevels: 4
+:sectnums:
+:stem: latexmath
+
+== Abstract
+
+This document presents the temporal semantics of Anvomidav, including the formal specification of time, duration, and music synchronization. We employ linear temporal logic (LTL), metric temporal logic (MTL), and real-time process algebras to model choreographic timing. The framework enables compile-time verification of temporal constraints and generates provably correct timing schedules.
+
+toc::[]
+
+== 1. Time Models
+
+=== 1.1 Continuous Time
+
+**Definition 1.1** (Time Domain):
+[stem]
+++++
+\mathbb{T} = \mathbb{R}_{\geq 0} = \{t \in \mathbb{R} \mid t \geq 0\}
+++++
+
+Time is modeled as non-negative real numbers, with:
+- Addition: stem:[t_1 + t_2]
+- Ordering: stem:[t_1 < t_2]
+- Metric: stem:[d(t_1, t_2) = |t_1 - t_2|]
+
+=== 1.2 Discrete Time (Beats)
+
+**Definition 1.2** (Beat Time):
+[stem]
+++++
+\mathbb{B} = \mathbb{N} \times \{1, \ldots, \mathsf{beats\_per\_measure}\}
+++++
+
+A beat is a pair stem:[(m, b)] representing measure stem:[m] and beat stem:[b] within that measure.
+
+**Definition 1.3** (Beat Ordering): Lexicographic ordering:
+[stem]
+++++
+(m_1, b_1) < (m_2, b_2) \iff m_1 < m_2 \lor (m_1 = m_2 \land b_1 < b_2)
+++++
+
+=== 1.3 Time-Beat Correspondence
+
+**Definition 1.4** (Tempo Function):
+[stem]
+++++
+\tau: \mathbb{T} \to \mathbb{R}_{>0} \quad \text{(BPM as function of time)}
+++++
+
+For constant tempo stem:[\tau_0]:
+[stem]
+++++
+t(\mathsf{beat}) = t_0 + \frac{60}{\tau_0} \cdot \mathsf{beatNumber}(\mathsf{beat})
+++++
+
+**Definition 1.5** (Variable Tempo Integration):
+[stem]
+++++
+t(\mathsf{beat}) = t_0 + \int_0^{\mathsf{beatNumber}(\mathsf{beat})} \frac{60}{\tau(s)} ds
+++++
+
+=== 1.4 Time Intervals
+
+**Definition 1.6** (Interval Types):
+[stem]
+++++
+\begin{align}
+[a, b] &= \{t \mid a \leq t \leq b\} && \text{(closed)} \\
+(a, b) &= \{t \mid a < t < b\} && \text{(open)} \\
+[a, b) &= \{t \mid a \leq t < b\} && \text{(left-closed, right-open)} \\
+(a, b] &= \{t \mid a < t \leq b\} && \text{(left-open, right-closed)}
+\end{align}
+++++
+
+**Definition 1.7** (Interval Operations):
+[stem]
+++++
+\begin{align}
+I_1 \cap I_2 &\quad \text{(intersection)} \\
+I_1 \cup I_2 &\quad \text{(union, if contiguous)} \\
+I_1 \setminus I_2 &\quad \text{(difference)} \\
+\mathsf{dur}(I) &= \sup(I) - \inf(I) \quad \text{(duration)}
+\end{align}
+++++
+
+**Definition 1.8** (Allen's Interval Relations):
+
+The 13 fundamental relations between intervals:
+
+[cols="1,2,3"]
+|===
+|Relation |Symbol |Definition
+
+|before |stem:[I_1 < I_2] |stem:[\sup(I_1) < \inf(I_2)]
+|meets |stem:[I_1 \mathbf{m} I_2] |stem:[\sup(I_1) = \inf(I_2)]
+|overlaps |stem:[I_1 \mathbf{o} I_2] |stem:[\inf(I_1) < \inf(I_2) < \sup(I_1) < \sup(I_2)]
+|starts |stem:[I_1 \mathbf{s} I_2] |stem:[\inf(I_1) = \inf(I_2) \land \sup(I_1) < \sup(I_2)]
+|during |stem:[I_1 \mathbf{d} I_2] |stem:[\inf(I_2) < \inf(I_1) \land \sup(I_1) < \sup(I_2)]
+|finishes |stem:[I_1 \mathbf{f} I_2] |stem:[\inf(I_2) < \inf(I_1) \land \sup(I_1) = \sup(I_2)]
+|equals |stem:[I_1 = I_2] |stem:[\inf(I_1) = \inf(I_2) \land \sup(I_1) = \sup(I_2)]
+|===
+
+(Plus 6 inverses: after, met-by, overlapped-by, started-by, contains, finished-by)
+
+== 2. Temporal Logic
+
+=== 2.1 Linear Temporal Logic (LTL)
+
+**Definition 2.1** (LTL Syntax):
+[stem]
+++++
+\begin{align}
+\phi ::=\ &p && \text{(atomic proposition)} \\
+        |\ &\neg \phi && \text{(negation)} \\
+        |\ &\phi_1 \land \phi_2 && \text{(conjunction)} \\
+        |\ &\mathbf{X} \phi && \text{(next)} \\
+        |\ &\phi_1 \mathbf{U} \phi_2 && \text{(until)} \\
+        |\ &\mathbf{F} \phi && \text{(eventually: } \top \mathbf{U} \phi \text{)} \\
+        |\ &\mathbf{G} \phi && \text{(always: } \neg\mathbf{F}\neg\phi \text{)}
+\end{align}
+++++
+
+**Definition 2.2** (LTL Semantics): Given trace stem:[\sigma = s_0 s_1 s_2 \ldots]:
+[stem]
+++++
+\begin{align}
+\sigma, i &\models p &&\iff p \in s_i \\
+\sigma, i &\models \neg\phi &&\iff \sigma, i \not\models \phi \\
+\sigma, i &\models \phi_1 \land \phi_2 &&\iff \sigma, i \models \phi_1 \land \sigma, i \models \phi_2 \\
+\sigma, i &\models \mathbf{X}\phi &&\iff \sigma, i+1 \models \phi \\
+\sigma, i &\models \phi_1 \mathbf{U} \phi_2 &&\iff \exists j \geq i.\ \sigma, j \models \phi_2 \land \forall k \in [i, j).\ \sigma, k \models \phi_1
+\end{align}
+++++
+
+=== 2.2 Metric Temporal Logic (MTL)
+
+**Definition 2.3** (MTL Extension): Time-bounded operators:
+[stem]
+++++
+\begin{align}
+\mathbf{F}_{[a,b]} \phi &\quad \text{(eventually within } [a,b] \text{)} \\
+\mathbf{G}_{[a,b]} \phi &\quad \text{(always during } [a,b] \text{)} \\
+\phi_1 \mathbf{U}_{[a,b]} \phi_2 &\quad \text{(until with time bound)}
+\end{align}
+++++
+
+**Definition 2.4** (MTL Semantics): Given signal stem:[\sigma: \mathbb{T} \to 2^{AP}]:
+[stem]
+++++
+\begin{align}
+\sigma, t &\models \mathbf{F}_{[a,b]} \phi &&\iff \exists t' \in [t+a, t+b].\ \sigma, t' \models \phi \\
+\sigma, t &\models \mathbf{G}_{[a,b]} \phi &&\iff \forall t' \in [t+a, t+b].\ \sigma, t' \models \phi \\
+\sigma, t &\models \phi_1 \mathbf{U}_{[a,b]} \phi_2 &&\iff \exists t' \in [t+a, t+b].\ \sigma, t' \models \phi_2 \land \forall t'' \in [t, t').\ \sigma, t'' \models \phi_1
+\end{align}
+++++
+
+=== 2.3 Signal Temporal Logic (STL)
+
+For continuous-valued signals (position, velocity):
+
+**Definition 2.5** (STL Predicates):
+[stem]
+++++
+\mu ::= f(x_1, \ldots, x_n) \sim c \quad \text{where } \sim \in \{<, \leq, =, \geq, >\}
+++++
+
+**Example 2.1** (Jump Height Constraint):
+[stem]
+++++
+\mathbf{G}_{[t_{takeoff}, t_{landing}]} (z(t) > 0)
+++++
+
+(Skater must be airborne during jump interval)
+
+=== 2.4 Choreography-Specific Temporal Properties
+
+**Property 2.1** (Element Completion):
+[stem]
+++++
+\mathsf{started}(e) \implies \mathbf{F}_{[0, \mathsf{maxDur}(e)]} \mathsf{completed}(e)
+++++
+
+**Property 2.2** (No Temporal Overlap for Same Skater):
+[stem]
+++++
+\mathsf{executing}(e_1) \implies \neg \mathsf{executing}(e_2) \quad \text{for } e_1 \neq e_2
+++++
+
+**Property 2.3** (Sequence Ordering):
+[stem]
+++++
+(e_1 ; e_2) \implies \mathsf{completed}(e_1) \mathbf{U} \mathsf{started}(e_2)
+++++
+
+**Property 2.4** (Music Synchronization):
+[stem]
+++++
+\mathsf{at\_beat}(m, b) \implies \mathsf{started}(e_{(m,b)})
+++++
+
+== 3. Duration Calculus
+
+=== 3.1 State Duration
+
+**Definition 3.1** (Duration): For state predicate stem:[P] over interval stem:[[b, e]]:
+[stem]
+++++
+\int P = \int_b^e \mathbf{1}_P(t) dt
+++++
+
+where stem:[\mathbf{1}_P(t) = 1] if stem:[P] holds at time stem:[t], else stem:[0].
+
+=== 3.2 Duration Calculus Formulas
+
+**Definition 3.2** (DC Syntax):
+[stem]
+++++
+\begin{align}
+D ::=\ &\int P && \text{(state duration)} \\
+      |\ &\ell && \text{(interval length)} \\
+      |\ &D_1 + D_2 && \text{(sum)} \\
+      |\ &c \cdot D && \text{(scalar multiplication)}
+\end{align}
+++++
+
+[stem]
+++++
+\begin{align}
+\phi ::=\ &D_1 \sim D_2 && \text{(comparison)} \\
+        |\ &\phi_1 \land \phi_2 && \text{(conjunction)} \\
+        |\ &\neg \phi && \text{(negation)} \\
+        |\ &\phi_1 \frown \phi_2 && \text{(chop: sequential composition)}
+\end{align}
+++++
+
+**Definition 3.3** (Chop Semantics):
+[stem]
+++++
+[b, e] \models \phi_1 \frown \phi_2 \iff \exists m \in [b, e].\ [b, m] \models \phi_1 \land [m, e] \models \phi_2
+++++
+
+=== 3.3 Element Duration Constraints
+
+**Constraint 3.1** (Jump Duration):
+[stem]
+++++
+\int \mathsf{jump}(j) = \mathsf{duration}(j) \in [0.3, 1.5] \text{ seconds}
+++++
+
+**Constraint 3.2** (Spin Duration):
+[stem]
+++++
+\int \mathsf{spin}(s) \geq 3.0 \text{ seconds for level credit}
+++++
+
+**Constraint 3.3** (Program Duration):
+[stem]
+++++
+\ell = T_{\text{program}} \pm \epsilon \quad \text{(within tolerance)}
+++++
+
+== 4. Timed Automata
+
+=== 4.1 Definition
+
+**Definition 4.1** (Timed Automaton): stem:[\mathcal{A} = (L, l_0, C, A, E, I)]
+
+- stem:[L]: Finite set of locations
+- stem:[l_0 \in L]: Initial location
+- stem:[C]: Finite set of clocks
+- stem:[A]: Finite alphabet of actions
+- stem:[E \subseteq L \times \Phi(C) \times A \times 2^C \times L]: Transitions (source, guard, action, reset, target)
+- stem:[I: L \to \Phi(C)]: Location invariants
+
+**Definition 4.2** (Clock Constraints):
+[stem]
+++++
+\Phi(C) ::= c \sim n \mid c_1 - c_2 \sim n \mid \phi_1 \land \phi_2
+++++
+
+where stem:[c, c_1, c_2 \in C], stem:[n \in \mathbb{N}], stem:[\sim \in \{<, \leq, =, \geq, >\}]
+
+=== 4.2 Choreography as Timed Automata
+
+**Example 4.1** (Jump Element Automaton):
+
+States: stem:[\{\mathsf{approach}, \mathsf{takeoff}, \mathsf{flight}, \mathsf{landing}\}]
+
+Transitions:
+[stem]
+++++
+\begin{align}
+(\mathsf{approach}, x \geq t_{\text{min}}, \mathsf{initiate}, \{x\}, \mathsf{takeoff}) \\
+(\mathsf{takeoff}, x \leq 0.1, \mathsf{jump}, \{x\}, \mathsf{flight}) \\
+(\mathsf{flight}, x = t_{\text{air}}, \mathsf{land}, \{x\}, \mathsf{landing})
+\end{align}
+++++
+
+=== 4.3 Product of Timed Automata
+
+For multiple elements/skaters, take product:
+[stem]
+++++
+\mathcal{A}_1 \times \mathcal{A}_2 = (L_1 \times L_2, (l_{0,1}, l_{0,2}), C_1 \cup C_2, \ldots)
+++++
+
+=== 4.4 Reachability and Model Checking
+
+**Problem 4.1** (Reachability): Given timed automaton stem:[\mathcal{A}] and target location stem:[l_f]:
+[stem]
+++++
+\exists \text{ run } \rho.\ \rho \text{ reaches } l_f
+++++
+
+**Theorem 4.1** (PSPACE-Completeness): Reachability for timed automata is PSPACE-complete.
+
+**Tool Support**: UPPAAL, Kronos, HyTech
+
+== 5. Process Algebra
+
+=== 5.1 Timed CSP
+
+**Definition 5.1** (Timed CSP Syntax):
+[stem]
+++++
+\begin{align}
+P ::=\ &\mathbf{STOP} && \text{(deadlock)} \\
+      |\ &\mathbf{SKIP} && \text{(termination)} \\
+      |\ &a \to P && \text{(prefix)} \\
+      |\ &P_1 \square P_2 && \text{(external choice)} \\
+      |\ &P_1 \sqcap P_2 && \text{(internal choice)} \\
+      |\ &P_1 \parallel_A P_2 && \text{(parallel with sync on } A \text{)} \\
+      |\ &\mathbf{WAIT}(t) && \text{(delay)} \\
+      |\ &P @[t_1, t_2] && \text{(timed interrupt)}
+\end{align}
+++++
+
+=== 5.2 Choreography in Timed CSP
+
+**Example 5.1** (Jump Sequence):
+[source]
+----
+TRIPLE_AXEL =
+    approach -> WAIT(2.0) ->
+    takeoff -> WAIT(0.8) ->
+    landing -> SKIP
+
+COMBO = TRIPLE_AXEL ; EULER ; TRIPLE_SALCHOW
+----
+
+**Example 5.2** (Pairs Parallel):
+[source]
+----
+PAIRS_JUMP =
+    (SKATER1_JUMP ||| SKATER2_JUMP) @ sync_point
+----
+
+=== 5.3 Refinement
+
+**Definition 5.2** (Traces Refinement):
+[stem]
+++++
+P_1 \sqsubseteq_T P_2 \iff \mathsf{traces}(P_2) \subseteq \mathsf{traces}(P_1)
+++++
+
+**Definition 5.3** (Failures Refinement):
+[stem]
+++++
+P_1 \sqsubseteq_F P_2 \iff \mathsf{failures}(P_2) \subseteq \mathsf{failures}(P_1)
+++++
+
+== 6. Music Synchronization
+
+=== 6.1 Music Structure Model
+
+**Definition 6.1** (Music Track):
+[stem]
+++++
+\mathcal{M} = (\mathsf{beats}, \mathsf{tempo}, \mathsf{signature}, \mathsf{phrases}, \mathsf{accents})
+++++
+
+- stem:[\mathsf{beats}: \mathbb{N}]: Total beats
+- stem:[\mathsf{tempo}: \mathbb{T} \to \mathbb{R}_{>0}]: Tempo function
+- stem:[\mathsf{signature}: \mathbb{N} \times \mathbb{N}]: Time signature (e.g., 4/4)
+- stem:[\mathsf{phrases}: \mathcal{P}(\mathbb{B} \times \mathbb{B})]: Phrase intervals
+- stem:[\mathsf{accents}: \mathcal{P}(\mathbb{B})]: Emphasized beats
+
+=== 6.2 Synchronization Points
+
+**Definition 6.2** (Sync Point): A mandatory alignment:
+[stem]
+++++
+\mathsf{sync}(e, b) \iff \mathsf{start}(e) = \mathsf{time}(b)
+++++
+
+**Definition 6.3** (Soft Sync): Preferred but not required:
+[stem]
+++++
+\mathsf{soft\_sync}(e, b, \epsilon) \iff |\mathsf{start}(e) - \mathsf{time}(b)| \leq \epsilon
+++++
+
+=== 6.3 Phrase Alignment
+
+**Definition 6.4** (Phrase-Element Alignment):
+[stem]
+++++
+\mathsf{aligned}(e, p) \iff \mathsf{interval}(e) \subseteq \mathsf{interval}(p) \lor \mathsf{interval}(e) \supseteq \mathsf{interval}(p)
+++++
+
+**Constraint 6.1** (Major Elements on Downbeats):
+[stem]
+++++
+e \in \mathsf{MajorElements} \implies \mathsf{start}(e) \in \mathsf{downbeats}(\mathcal{M})
+++++
+
+=== 6.4 Tempo Mapping
+
+**Definition 6.5** (Warp Function): Maps choreographic time to music time:
+[stem]
+++++
+w: \mathbb{T}_{\text{choreo}} \to \mathbb{T}_{\text{music}}
+++++
+
+**Constraint 6.2** (Monotonicity):
+[stem]
+++++
+t_1 < t_2 \implies w(t_1) < w(t_2)
+++++
+
+**Constraint 6.3** (Bounded Stretch):
+[stem]
+++++
+\forall t.\ \frac{1}{k} \leq w'(t) \leq k \quad \text{for some } k \geq 1
+++++
+
+== 7. Scheduling Theory
+
+=== 7.1 Element Scheduling Problem
+
+**Definition 7.1** (Schedule): Assignment of start times:
+[stem]
+++++
+\mathcal{S}: \mathsf{Elements} \to \mathbb{T}
+++++
+
+**Constraints**:
+1. Temporal ordering: stem:[e_1 \prec e_2 \implies \mathcal{S}(e_1) + \mathsf{dur}(e_1) \leq \mathcal{S}(e_2)]
+2. Resource exclusion: Per-skater non-overlap
+3. Sync points: stem:[\mathcal{S}(e) = \mathsf{time}(b)] for stem:[\mathsf{sync}(e, b)]
+4. Program bounds: stem:[\forall e.\ \mathcal{S}(e) + \mathsf{dur}(e) \leq T]
+
+=== 7.2 Constraint Satisfaction
+
+**Definition 7.2** (Temporal CSP):
+[stem]
+++++
+\mathsf{TCSP} = (\mathcal{V}, \mathcal{D}, \mathcal{C})
+++++
+
+- stem:[\mathcal{V} = \{t_e \mid e \in \mathsf{Elements}\}]: Start time variables
+- stem:[\mathcal{D} = [0, T]]: Time domain
+- stem:[\mathcal{C}]: Temporal constraints
+
+**Theorem 7.1** (Simple Temporal Problem): If all constraints are difference constraints (stem:[t_i - t_j \leq c]), the problem is polynomial-time solvable using Bellman-Ford.
+
+=== 7.3 Optimization
+
+**Definition 7.3** (Optimal Schedule):
+[stem]
+++++
+\mathcal{S}^* = \arg\min_{\mathcal{S}} \sum_e w_e \cdot \mathsf{deviation}(\mathcal{S}(e), \mathsf{ideal}(e))
+++++
+
+Subject to all constraints being satisfied.
+
+== 8. Real-Time Systems Connection
+
+=== 8.1 Deadlines
+
+**Definition 8.1** (Hard Deadline):
+[stem]
+++++
+\mathsf{deadline}(e) \implies \mathsf{completed}(e) \text{ before } t_d
+++++
+
+Missing a hard deadline (e.g., program end) is a failure.
+
+**Definition 8.2** (Soft Deadline):
+[stem]
+++++
+\mathsf{soft\_deadline}(e, t_d, p) \implies P(\mathsf{completed}(e) \text{ before } t_d) \geq p
+++++
+
+=== 8.2 Worst-Case Execution Time
+
+**Definition 8.3** (WCET): Maximum duration of an element:
+[stem]
+++++
+\mathsf{WCET}(e) = \sup\{\mathsf{dur}(e) \mid \text{all executions}\}
+++++
+
+**Theorem 8.1** (Schedulability): A schedule is feasible if:
+[stem]
+++++
+\sum_e \frac{\mathsf{WCET}(e)}{T} \leq 1
+++++
+
+(Utilization bound)
+
+== 9. TODO: Incomplete Specifications
+
+[WARNING]
+====
+The following temporal aspects require further development:
+
+* [ ] **§2.3** - Complete STL robustness semantics
+* [ ] **§3** - Duration calculus decidability proofs
+* [ ] **§4** - Full timed automata for all element types
+* [ ] **§5** - Complete CSP semantics with time
+* [ ] **§6** - Beat detection and automatic sync algorithms
+* [ ] **§7** - Efficient scheduling algorithms
+* [ ] **§8** - Real-time scheduling analysis
+* [ ] **§10** - Rubato and expressive timing models
+* [ ] **§11** - Multi-resolution temporal abstraction
+====
+
+== 10. References
+
+1. Alur, R. & Dill, D. L. "A Theory of Timed Automata." _TCS_, 126(2), 1994.
+2. Maler, O. & Nickovic, D. "Monitoring Temporal Properties of Continuous Signals." _FORMATS_, 2004.
+3. Zhou, C. & Hansen, M. R. _Duration Calculus: A Formal Approach to Real-Time Systems_. Springer, 2004.
+4. Hoare, C. A. R. _Communicating Sequential Processes_. Prentice Hall, 1985.
+5. Schneider, S. _Concurrent and Real-Time Systems: The CSP Approach_. Wiley, 2000.
+6. Allen, J. F. "Maintaining Knowledge about Temporal Intervals." _CACM_, 26(11), 1983.
+
+---
+
+_Document Version: 0.1.0-draft_
+_Last Updated: 2025-01-01_

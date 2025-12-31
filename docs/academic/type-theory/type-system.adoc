@@ -1,0 +1,703 @@
+// SPDX-FileCopyrightText: 2025 hyperpolymath
+// SPDX-License-Identifier: MIT OR AGPL-3.0-or-later
+
+= Anvomidav Type System: Theory and Proofs
+:toc: macro
+:toc-title: Contents
+:toclevels: 4
+:sectnums:
+:stem: latexmath
+
+== Abstract
+
+This document presents the formal type system for Anvomidav, a domain-specific language for figure skating choreography. We define a dependent type system with refinement types, capable of statically verifying temporal constraints, spatial validity, and ISU rule compliance. We prove key metatheoretic properties including type soundness (progress and preservation), decidability of type checking, and the expressiveness of the type system for domain-specific invariants.
+
+toc::[]
+
+== 1. Type System Overview
+
+=== 1.1 Design Goals
+
+The Anvomidav type system is designed to:
+
+1. **Prevent invalid element sequences** at compile time
+2. **Verify temporal constraints** (no overlapping elements, proper timing)
+3. **Check spatial validity** (reachable positions, legal paths)
+4. **Encode ISU rules** as type constraints
+5. **Support abstraction** through parametric polymorphism
+6. **Enable gradual typing** for rapid prototyping
+
+=== 1.2 Type System Classification
+
+[stem]
+++++
+\text{Anvomidav Type System} \subseteq \text{System } F_\omega + \text{Refinement Types} + \text{Linear Types (partial)}
+++++
+
+Key features:
+- **Hindley-Milner core** with type inference
+- **Refinement types** for domain predicates
+- **Dependent types** for array bounds and element counts
+- **Linear types** for exclusive resource access (rink regions, time slots)
+- **Effect system** for tracking temporal and spatial side effects
+
+== 2. Base Types
+
+=== 2.1 Primitive Types
+
+[stem]
+++++
+\begin{align}
+\tau_{\text{prim}} ::=\ &\texttt{unit}   &&\text{Unit type (void)} \\
+                       |\ &\texttt{bool}  &&\text{Boolean} \\
+                       |\ &\texttt{int}   &&\text{Arbitrary precision integer} \\
+                       |\ &\texttt{float} &&\text{IEEE 754 double} \\
+                       |\ &\texttt{string}&&\text{UTF-8 string}
+\end{align}
+++++
+
+=== 2.2 Dimensional Types
+
+Types with physical dimensions, enabling dimensional analysis:
+
+[stem]
+++++
+\begin{align}
+\tau_{\text{dim}} ::=\ &\texttt{time}     &&: \mathsf{Dim}[\mathsf{T}^1] \\
+                      |\ &\texttt{duration}&&: \mathsf{Dim}[\mathsf{T}^1] \\
+                      |\ &\texttt{angle}   &&: \mathsf{Dim}[\mathsf{rad}] \\
+                      |\ &\texttt{length}  &&: \mathsf{Dim}[\mathsf{L}^1] \\
+                      |\ &\texttt{speed}   &&: \mathsf{Dim}[\mathsf{L}^1 \cdot \mathsf{T}^{-1}] \\
+                      |\ &\texttt{accel}   &&: \mathsf{Dim}[\mathsf{L}^1 \cdot \mathsf{T}^{-2}]
+\end{align}
+++++
+
+**Dimensional Type Rules**:
+
+[stem]
+++++
+\frac{\Gamma \vdash e_1 : \mathsf{Dim}[d_1] \quad \Gamma \vdash e_2 : \mathsf{Dim}[d_2]}
+     {\Gamma \vdash e_1 \cdot e_2 : \mathsf{Dim}[d_1 \cdot d_2]}
+     \quad \text{(T-DIM-MUL)}
+++++
+
+[stem]
+++++
+\frac{\Gamma \vdash e_1 : \mathsf{Dim}[d] \quad \Gamma \vdash e_2 : \mathsf{Dim}[d]}
+     {\Gamma \vdash e_1 + e_2 : \mathsf{Dim}[d]}
+     \quad \text{(T-DIM-ADD)}
+++++
+
+=== 2.3 Spatial Types
+
+[stem]
+++++
+\begin{align}
+\tau_{\text{spatial}} ::=\ &\texttt{pos2d}  &&= \mathbb{R}^2 \\
+                          |\ &\texttt{pos3d}  &&= \mathbb{R}^3 \\
+                          |\ &\texttt{vec2d}  &&= \mathbb{R}^2\ (\text{vector space}) \\
+                          |\ &\texttt{vec3d}  &&= \mathbb{R}^3\ (\text{vector space}) \\
+                          |\ &\texttt{path}   &&= [0,1] \to \texttt{pos2d} \times \texttt{edge} \\
+                          |\ &\texttt{region} &&= \mathcal{P}(\texttt{pos2d})
+\end{align}
+++++
+
+=== 2.4 Skating-Specific Types
+
+[stem]
+++++
+\begin{align}
+\tau_{\text{edge}} &= \{\texttt{LFO}, \texttt{LFI}, \texttt{LBO}, \texttt{LBI}, \texttt{RFO}, \texttt{RFI}, \texttt{RBO}, \texttt{RBI}\} \\
+\tau_{\text{foot}} &= \{\texttt{Left}, \texttt{Right}\} \\
+\tau_{\text{dir}} &= \{\texttt{Forward}, \texttt{Backward}\} \\
+\tau_{\text{curve}} &= \{\texttt{Inside}, \texttt{Outside}, \texttt{Flat}\} \\
+\tau_{\text{level}} &= \{\texttt{B}, \texttt{1}, \texttt{2}, \texttt{3}, \texttt{4}\}
+\end{align}
+++++
+
+== 3. Composite Types
+
+=== 3.1 Product Types
+
+[stem]
+++++
+\frac{\Gamma \vdash e_1 : \tau_1 \quad \Gamma \vdash e_2 : \tau_2}
+     {\Gamma \vdash (e_1, e_2) : \tau_1 \times \tau_2}
+     \quad \text{(T-PAIR)}
+++++
+
+=== 3.2 Sum Types (Variants)
+
+[stem]
+++++
+\tau_{\text{sum}} ::= \tau_1 + \tau_2 + \cdots + \tau_n
+++++
+
+Example: Element type as a sum
+[stem]
+++++
+\texttt{Element} = \texttt{Jump} + \texttt{Spin} + \texttt{Step} + \texttt{Lift} + \texttt{Transition}
+++++
+
+=== 3.3 Function Types
+
+[stem]
+++++
+\frac{\Gamma, x : \tau_1 \vdash e : \tau_2}
+     {\Gamma \vdash \lambda x. e : \tau_1 \to \tau_2}
+     \quad \text{(T-ABS)}
+++++
+
+[stem]
+++++
+\frac{\Gamma \vdash e_1 : \tau_1 \to \tau_2 \quad \Gamma \vdash e_2 : \tau_1}
+     {\Gamma \vdash e_1\ e_2 : \tau_2}
+     \quad \text{(T-APP)}
+++++
+
+=== 3.4 Record Types
+
+[stem]
+++++
+\{l_1 : \tau_1, l_2 : \tau_2, \ldots, l_n : \tau_n\}
+++++
+
+Example: Jump record type
+[source]
+----
+type Jump = {
+    jump_type: JumpType,
+    rotations: int,
+    entry_edge: Edge,
+    exit_edge: Edge,
+    base_value: float,
+    goe: float
+}
+----
+
+== 4. Polymorphic Types
+
+=== 4.1 Parametric Polymorphism (System F)
+
+**Type Abstraction**:
+[stem]
+++++
+\frac{\Gamma, \alpha : \mathsf{Type} \vdash e : \tau}
+     {\Gamma \vdash \Lambda \alpha. e : \forall \alpha. \tau}
+     \quad \text{(T-TABS)}
+++++
+
+**Type Application**:
+[stem]
+++++
+\frac{\Gamma \vdash e : \forall \alpha. \tau}
+     {\Gamma \vdash e\ [\tau'] : \tau[\alpha := \tau']}
+     \quad \text{(T-TAPP)}
+++++
+
+=== 4.2 Higher-Kinded Types (System Fω)
+
+**Kind System**:
+[stem]
+++++
+\kappa ::= * \mid \kappa_1 \Rightarrow \kappa_2
+++++
+
+Where stem:[*] is the kind of types, and stem:[\kappa_1 \Rightarrow \kappa_2] is the kind of type constructors.
+
+Example: Sequence type constructor
+[stem]
+++++
+\texttt{Seq} : * \Rightarrow *
+++++
+
+=== 4.3 Type Inference
+
+The type system supports Hindley-Milner style type inference for the polymorphic core.
+
+**Algorithm W** extended with:
+1. Dimensional type unification
+2. Refinement constraint propagation
+3. Effect inference
+
+**Theorem 4.1** (Principal Types): _Every well-typed term has a principal type that generalizes all its types._
+
+== 5. Refinement Types
+
+=== 5.1 Basic Refinement Types
+
+[stem]
+++++
+\{x : \tau \mid \phi(x)\}
+++++
+
+Where stem:[\phi] is a predicate in a decidable logic (quantifier-free linear arithmetic with uninterpreted functions).
+
+**Examples**:
+[stem]
+++++
+\begin{align}
+\texttt{PosInt} &= \{n : \texttt{int} \mid n > 0\} \\
+\texttt{Rotations} &= \{n : \texttt{int} \mid 1 \leq n \leq 4\} \\
+\texttt{ValidTime} &= \{t : \texttt{time} \mid t \geq 0\}
+\end{align}
+++++
+
+=== 5.2 Refinement Type Rules
+
+**Subtyping**:
+[stem]
+++++
+\frac{\forall x.\ \phi_1(x) \implies \phi_2(x)}
+     {\{x : \tau \mid \phi_1\} <: \{x : \tau \mid \phi_2\}}
+     \quad \text{(S-REFINE)}
+++++
+
+**Introduction**:
+[stem]
+++++
+\frac{\Gamma \vdash e : \tau \quad \Gamma \vdash \phi(e)}
+     {\Gamma \vdash e : \{x : \tau \mid \phi\}}
+     \quad \text{(T-REFINE-INTRO)}
+++++
+
+**Elimination**:
+[stem]
+++++
+\frac{\Gamma \vdash e : \{x : \tau \mid \phi\}}
+     {\Gamma \vdash e : \tau}
+     \quad \text{(T-REFINE-ELIM)}
+++++
+
+=== 5.3 Domain-Specific Refinements
+
+**Edge Compatibility**:
+[stem]
+++++
+\texttt{ValidTransition}(e_1, e_2) = \{(e_1, e_2) : \texttt{Edge}^2 \mid \mathsf{compatible}(e_1, e_2)\}
+++++
+
+**Jump Entry Requirements**:
+[stem]
+++++
+\texttt{LutzEntry} = \{e : \texttt{Edge} \mid e = \texttt{LBO}\}
+++++
+[stem]
+++++
+\texttt{FlipEntry} = \{e : \texttt{Edge} \mid e = \texttt{LBI}\}
+++++
+
+**Temporal Non-Overlap**:
+[stem]
+++++
+\texttt{NonOverlapping}(i_1, i_2) = \{(i_1, i_2) : \texttt{Interval}^2 \mid i_1.\mathsf{end} \leq i_2.\mathsf{start} \lor i_2.\mathsf{end} \leq i_1.\mathsf{start}\}
+++++
+
+== 6. Dependent Types
+
+=== 6.1 Dependent Function Types (Π-types)
+
+[stem]
+++++
+\Pi x : \tau_1.\ \tau_2(x)
+++++
+
+The return type stem:[\tau_2] may depend on the value stem:[x].
+
+**Example**: Fixed-size element sequence
+[stem]
+++++
+\texttt{ElementSeq} : \Pi n : \texttt{nat}.\ \texttt{Vec}[\texttt{Element}, n]
+++++
+
+=== 6.2 Dependent Pair Types (Σ-types)
+
+[stem]
+++++
+\Sigma x : \tau_1.\ \tau_2(x)
+++++
+
+**Example**: Timed element
+[stem]
+++++
+\texttt{TimedElement} = \Sigma t : \texttt{time}.\ \texttt{Element} \times \{d : \texttt{duration} \mid t + d \leq \texttt{program\_length}\}
+++++
+
+=== 6.3 Index-Dependent Types
+
+**Rotation Count**:
+[stem]
+++++
+\texttt{Jump}[n] = \{j : \texttt{Jump} \mid j.\mathsf{rotations} = n\}
+++++
+
+**Level-Indexed Spin**:
+[stem]
+++++
+\texttt{Spin}[l] = \{s : \texttt{Spin} \mid s.\mathsf{level} = l\}
+++++
+
+== 7. Linear and Affine Types
+
+=== 7.1 Resource Types
+
+For exclusive access to temporal and spatial resources:
+
+[stem]
+++++
+\tau_{\text{linear}} ::= \tau^1 \quad \text{(must be used exactly once)}
+++++
+
+[stem]
+++++
+\tau_{\text{affine}} ::= \tau^? \quad \text{(may be used at most once)}
+++++
+
+=== 7.2 Time Slot Linearity
+
+Each time slot in a choreography can only be occupied once (per skater):
+
+[stem]
+++++
+\texttt{TimeSlot}[t_1, t_2]^1 \quad \text{(linear time resource)}
+++++
+
+**Rule** (Time Slot Consumption):
+[stem]
+++++
+\frac{\Gamma, r : \texttt{TimeSlot}[t_1, t_2]^1 \vdash e : \tau \quad r \in \mathsf{FV}(e)}
+     {\Gamma, r : \texttt{TimeSlot}[t_1, t_2]^1 \vdash \texttt{at}(r)\ \{e\} : \tau}
+++++
+
+=== 7.3 Region Exclusivity
+
+For pairs skating, ensure no spatial conflicts:
+
+[stem]
+++++
+\texttt{Region}[R]^1 \quad \text{(exclusive region access)}
+++++
+
+== 8. Effect System
+
+=== 8.1 Effect Types
+
+We track computational effects using row-polymorphic effects:
+
+[stem]
+++++
+\tau_1 \xrightarrow{\varepsilon} \tau_2
+++++
+
+where stem:[\varepsilon] is an effect row.
+
+=== 8.2 Effect Kinds
+
+[stem]
+++++
+\begin{align}
+\varepsilon ::=\ &\texttt{Pure}          &&\text{No side effects} \\
+               |\ &\texttt{Temporal}[t]   &&\text{Advances time by } t \\
+               |\ &\texttt{Spatial}[p]    &&\text{Moves to position } p \\
+               |\ &\texttt{Schedule}[e]   &&\text{Schedules element } e \\
+               |\ &\varepsilon_1 \cup \varepsilon_2 &&\text{Effect composition}
+\end{align}
+++++
+
+=== 8.3 Effect Inference Rules
+
+**Pure Expressions**:
+[stem]
+++++
+\frac{\Gamma \vdash e : \tau}
+     {\Gamma \vdash e : \tau\ !\ \texttt{Pure}}
+     \quad \text{(E-PURE)}
+++++
+
+**Element Execution Effect**:
+[stem]
+++++
+\frac{\Gamma \vdash e : \texttt{Element} \quad \mathsf{duration}(e) = d}
+     {\Gamma \vdash \texttt{execute}(e) : \texttt{unit}\ !\ \texttt{Temporal}[d] \cup \texttt{Schedule}[e]}
+     \quad \text{(E-ELEMENT)}
+++++
+
+**Effect Sequencing**:
+[stem]
+++++
+\frac{\Gamma \vdash e_1 : \tau_1\ !\ \varepsilon_1 \quad \Gamma \vdash e_2 : \tau_2\ !\ \varepsilon_2}
+     {\Gamma \vdash e_1; e_2 : \tau_2\ !\ \varepsilon_1 \cup \varepsilon_2}
+     \quad \text{(E-SEQ)}
+++++
+
+== 9. Element Types
+
+=== 9.1 Jump Types
+
+[source]
+----
+type JumpType =
+    | Axel      // A
+    | Salchow   // S
+    | ToeLoop   // T
+    | Loop      // Lo
+    | Flip      // F
+    | Lutz      // Lz
+    | Walley
+    | Euler     // Eu (half loop)
+
+type Jump<n: int where 1 <= n <= 4> = {
+    jump_type: JumpType,
+    rotations: n,
+    entry_edge: Edge,
+    exit_edge: Edge,
+    under_rotated: bool,
+    downgraded: bool
+}
+----
+
+**Type Constraints**:
+[stem]
+++++
+\begin{align}
+\texttt{Axel}[n] &: \{j : \texttt{Jump} \mid j.\mathsf{type} = \texttt{Axel} \land j.\mathsf{rotations} = n + 0.5\} \\
+\texttt{Lutz}[n] &: \{j : \texttt{Jump} \mid j.\mathsf{entry} = \texttt{LBO}\} \\
+\texttt{Flip}[n] &: \{j : \texttt{Jump} \mid j.\mathsf{entry} = \texttt{LBI}\}
+\end{align}
+++++
+
+=== 9.2 Spin Types
+
+[source]
+----
+type SpinPosition =
+    | Upright
+    | Sit
+    | Camel
+    | Layback
+    | Biellmann
+
+type SpinModifier =
+    | Flying
+    | Change
+    | Combination
+
+type Spin<l: Level> = {
+    positions: list<SpinPosition>,
+    modifiers: set<SpinModifier>,
+    level: l,
+    duration: duration,
+    revolutions: int
+}
+----
+
+**Level Requirements (Refinement)**:
+[stem]
+++++
+\texttt{Spin}[\texttt{4}] : \{s : \texttt{Spin} \mid \mathsf{level\_features}(s) \geq 4\}
+++++
+
+=== 9.3 Step Sequence Types
+
+[source]
+----
+type StepType =
+    | ThreeTurn
+    | Bracket
+    | Rocker
+    | Counter
+    | Twizzle
+    | Choctaw
+    | Mohawk
+
+type StepSequence<l: Level> = {
+    steps: list<StepType>,
+    path: Path,
+    level: l,
+    duration: duration
+}
+----
+
+=== 9.4 Combination Types
+
+[source]
+----
+type JumpCombo<n: int where 2 <= n <= 3> = {
+    jumps: Vec<Jump, n>,
+    // Constraint: only T or Lo after first jump (unless Euler)
+    valid: all(i in 1..n-1 =>
+        jumps[i].jump_type in {ToeLoop, Loop} ||
+        jumps[i-1].jump_type == Euler
+    )
+}
+----
+
+== 10. Type Soundness
+
+=== 10.1 Progress Theorem
+
+**Theorem 10.1** (Progress): _If stem:[\emptyset \vdash e : \tau] then either stem:[e] is a value or there exists stem:[e'] such that stem:[e \to e']._
+
+**Proof**: By induction on the typing derivation.
+
+*Base cases*:
+- Constants and values: Already values. ✓
+- Variables: Cannot occur in closed terms (stem:[\emptyset] context). ✓
+
+*Inductive cases*:
+- **Application** stem:[e_1\ e_2]: By IH, stem:[e_1] is either a value or can step.
+  - If stem:[e_1 \to e_1'], then stem:[e_1\ e_2 \to e_1'\ e_2] by E-APP1.
+  - If stem:[e_1 = \lambda x. e] (a value), then by IH, stem:[e_2] steps or is a value.
+    - If stem:[e_2 \to e_2'], then stem:[(\lambda x. e)\ e_2 \to (\lambda x. e)\ e_2'] by E-APP2.
+    - If stem:[e_2 = v], then stem:[(\lambda x. e)\ v \to e[x := v]] by E-BETA. ✓
+
+- **Jump execution** stem:[\texttt{jump}\ j]:
+  - If preconditions satisfied (checked by refinement types), execution proceeds.
+  - If preconditions not satisfied, type error prevents this case. ✓
+
+- **Temporal construct** stem:[\texttt{at}\ t\ \{e\}]:
+  - By IH, stem:[e] is a value or can step.
+  - Time advancement always possible (monotonic). ✓
+
+∎
+
+=== 10.2 Preservation Theorem
+
+**Theorem 10.2** (Preservation): _If stem:[\Gamma \vdash e : \tau] and stem:[e \to e'], then stem:[\Gamma \vdash e' : \tau]._
+
+**Proof**: By induction on the derivation of stem:[e \to e'].
+
+*Key cases*:
+
+- **E-BETA**: stem:[(\lambda x:\tau_1. e)\ v \to e[x := v]]
+  - By T-ABS: stem:[\Gamma, x:\tau_1 \vdash e : \tau_2]
+  - By T-APP: stem:[\Gamma \vdash v : \tau_1]
+  - By substitution lemma: stem:[\Gamma \vdash e[x := v] : \tau_2] ✓
+
+- **E-JUMP**: stem:[\langle \texttt{jump}\ j, \sigma \rangle \to \langle (), \sigma' \rangle]
+  - stem:[\texttt{jump}\ j : \texttt{unit}\ !\ \texttt{Schedule}[j]]
+  - Result stem:[()] has type stem:[\texttt{unit}] ✓
+  - State transformation preserves state typing (separate lemma) ✓
+
+- **E-AT**: stem:[\texttt{at}\ t\ \{e\} \to e] (with time update)
+  - Inner statement stem:[e] retains its type ✓
+
+∎
+
+=== 10.3 Type Soundness Corollary
+
+**Corollary 10.3** (Type Soundness): _Well-typed programs do not get stuck._
+
+[stem]
+++++
+\emptyset \vdash e : \tau \implies e \to^* v \lor e \text{ diverges}
+++++
+
+This follows from Progress and Preservation by induction on the reduction sequence.
+
+== 11. Decidability
+
+=== 11.1 Type Checking Decidability
+
+**Theorem 11.1** (Decidability of Type Checking): _Given stem:[\Gamma], stem:[e], and stem:[\tau], it is decidable whether stem:[\Gamma \vdash e : \tau]._
+
+**Proof sketch**: The type system is a conservative extension of Hindley-Milner with:
+1. Refinement predicates in decidable quantifier-free linear arithmetic (QF_LIA)
+2. SMT solver integration for refinement checking
+3. Bounded dependent types (indices are finite)
+
+The refinement checking reduces to SMT queries, which are decidable for the chosen logic.
+
+=== 11.2 Type Inference
+
+**Theorem 11.2** (Decidability of Type Inference): _Given stem:[\Gamma] and stem:[e], it is decidable whether there exists stem:[\tau] such that stem:[\Gamma \vdash e : \tau], and if so, the principal type can be computed._
+
+The inference algorithm extends Algorithm W with:
+1. Constraint generation for refinements
+2. Horn clause solving for dependent indices
+3. Effect inference through unification
+
+== 12. Subtyping
+
+=== 12.1 Subtype Relation
+
+[stem]
+++++
+\tau_1 <: \tau_2
+++++
+
+=== 12.2 Subtyping Rules
+
+**S-REFL**:
+[stem]
+++++
+\frac{}{\tau <: \tau}
+++++
+
+**S-TRANS**:
+[stem]
+++++
+\frac{\tau_1 <: \tau_2 \quad \tau_2 <: \tau_3}{\tau_1 <: \tau_3}
+++++
+
+**S-REFINE**:
+[stem]
+++++
+\frac{\forall x.\ \phi_1(x) \implies \phi_2(x)}{\{x : \tau \mid \phi_1\} <: \{x : \tau \mid \phi_2\}}
+++++
+
+**S-ARROW** (contravariant in argument):
+[stem]
+++++
+\frac{\tau_1' <: \tau_1 \quad \tau_2 <: \tau_2'}{\tau_1 \to \tau_2 <: \tau_1' \to \tau_2'}
+++++
+
+**S-ELEMENT**:
+[stem]
+++++
+\texttt{Jump} <: \texttt{Element}
+++++
+[stem]
+++++
+\texttt{Spin} <: \texttt{Element}
+++++
+
+=== 12.3 Level Subtyping
+
+Higher levels are subtypes of lower levels (a Level 4 spin satisfies Level 3 requirements):
+
+[stem]
+++++
+\texttt{Spin}[\texttt{4}] <: \texttt{Spin}[\texttt{3}] <: \texttt{Spin}[\texttt{2}] <: \texttt{Spin}[\texttt{1}] <: \texttt{Spin}[\texttt{B}]
+++++
+
+== 13. TODO: Incomplete Specifications
+
+[WARNING]
+====
+The following aspects require further development:
+
+* [ ] **§5** - Complete refinement logic specification with ISU predicates
+* [ ] **§7** - Full linear type system formalization for resource management
+* [ ] **§8** - Effect system soundness proof
+* [ ] **§10** - Machine-checked proofs (Coq/Agda/Lean formalization)
+* [ ] **§11.2** - Complete type inference algorithm specification
+* [ ] **§12** - Algorithmic subtyping (decidable subtype checking)
+* [ ] **§14** - Gradual typing integration for partial annotations
+* [ ] **§15** - Type error diagnostics and recovery
+====
+
+== 14. References
+
+1. Pierce, B. C. _Types and Programming Languages_. MIT Press, 2002.
+2. Pierce, B. C. (ed.). _Advanced Topics in Types and Programming Languages_. MIT Press, 2005.
+3. Rondon, P. M., Kawaguchi, M., & Jhala, R. "Liquid Types." _PLDI_, 2008.
+4. Vazou, N. _Liquid Haskell: Haskell as a Theorem Prover_. PhD Thesis, UCSD, 2016.
+5. Wadler, P. "Linear Types Can Change the World!" _Programming Concepts and Methods_, 1990.
+6. Nielson, F. & Nielson, H. R. "Type and Effect Systems." _Correct System Design_, 1999.
+7. Dunfield, J. & Krishnaswami, N. "Complete and Easy Bidirectional Typechecking for Higher-Rank Polymorphism." _ICFP_, 2013.
+
+---
+
+_Document Version: 0.1.0-draft_
+_Last Updated: 2025-01-01_

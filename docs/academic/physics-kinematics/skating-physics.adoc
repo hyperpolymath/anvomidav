@@ -1,0 +1,625 @@
+// SPDX-FileCopyrightText: 2025 hyperpolymath
+// SPDX-License-Identifier: MIT OR AGPL-3.0-or-later
+
+= Physics and Biomechanics of Figure Skating
+:toc: macro
+:toc-title: Contents
+:toclevels: 4
+:sectnums:
+:stem: latexmath
+
+== Abstract
+
+This document establishes the physical and biomechanical foundations for Anvomidav's simulation and validation capabilities. We present the classical mechanics of skating motion, rotational dynamics of jumps and spins, blade-ice interaction physics, and the biomechanical constraints of human skaters. These models enable physics-based validation of choreography feasibility and realistic animation generation.
+
+toc::[]
+
+== 1. Classical Mechanics Framework
+
+=== 1.1 Reference Frames
+
+**Definition 1.1** (Inertial Frame): The rink frame stem:[\mathcal{F}_W] (world frame) is treated as inertial for skating timescales:
+[stem]
+++++
+\vec{F}_{\text{net}} = m\vec{a}
+++++
+
+**Definition 1.2** (Body Frame): The skater-fixed frame stem:[\mathcal{F}_S] rotates with angular velocity stem:[\vec{\omega}]:
+[stem]
+++++
+\left(\frac{d\vec{v}}{dt}\right)_{\mathcal{F}_W} = \left(\frac{d\vec{v}}{dt}\right)_{\mathcal{F}_S} + \vec{\omega} \times \vec{v}
+++++
+
+=== 1.2 Equations of Motion
+
+**Definition 1.3** (Translational Motion):
+[stem]
+++++
+m\frac{d\vec{v}}{dt} = \vec{F}_{\text{propulsion}} + \vec{F}_{\text{friction}} + \vec{F}_{\text{air}} + \vec{F}_{\text{gravity}}
+++++
+
+**Definition 1.4** (Rotational Motion):
+[stem]
+++++
+\mathbf{I}\frac{d\vec{\omega}}{dt} + \vec{\omega} \times (\mathbf{I}\vec{\omega}) = \vec{\tau}_{\text{net}}
+++++
+
+where stem:[\mathbf{I}] is the moment of inertia tensor.
+
+=== 1.3 Lagrangian Formulation
+
+**Definition 1.5** (Lagrangian):
+[stem]
+++++
+\mathcal{L} = T - V = \frac{1}{2}m\|\vec{v}\|^2 + \frac{1}{2}\vec{\omega}^T \mathbf{I} \vec{\omega} - mgh
+++++
+
+**Definition 1.6** (Euler-Lagrange Equations):
+[stem]
+++++
+\frac{d}{dt}\left(\frac{\partial \mathcal{L}}{\partial \dot{q}_i}\right) - \frac{\partial \mathcal{L}}{\partial q_i} = Q_i
+++++
+
+where stem:[Q_i] are generalized non-conservative forces.
+
+=== 1.4 Hamiltonian Formulation
+
+**Definition 1.7** (Hamiltonian):
+[stem]
+++++
+\mathcal{H} = \sum_i p_i \dot{q}_i - \mathcal{L} = T + V
+++++
+
+**Definition 1.8** (Hamilton's Equations):
+[stem]
+++++
+\dot{q}_i = \frac{\partial \mathcal{H}}{\partial p_i}, \quad \dot{p}_i = -\frac{\partial \mathcal{H}}{\partial q_i}
+++++
+
+== 2. Blade-Ice Interaction
+
+=== 2.1 Blade Geometry
+
+**Definition 2.1** (Blade Parameters):
+
+- Length: stem:[L_b \approx 0.30\text{m}]
+- Width: stem:[w_b \approx 4\text{mm}]
+- Rocker radius: stem:[R_r \approx 2\text{m}] (curvature of blade profile)
+- Hollow radius: stem:[R_h \approx 10\text{mm}] (grinding concavity)
+
+**Definition 2.2** (Contact Geometry): The blade contacts ice on two edges:
+[stem]
+++++
+\text{Edge width} = 2\sqrt{R_h^2 - (R_h - d)^2}
+++++
+
+where stem:[d] is the penetration depth.
+
+=== 2.2 Friction Model
+
+**Definition 2.3** (Anisotropic Friction): Friction differs by direction:
+
+[stem]
+++++
+\begin{align}
+\mu_{\parallel} &\approx 0.003 - 0.01 && \text{(along blade)} \\
+\mu_{\perp} &\approx 0.3 - 0.5 && \text{(perpendicular to blade)}
+\end{align}
+++++
+
+**Definition 2.4** (Friction Force):
+[stem]
+++++
+\vec{F}_f = -\mu_{\parallel} F_N \hat{v}_{\parallel} - \mu_{\perp} F_N \hat{v}_{\perp}
+++++
+
+where stem:[F_N = mg\cos\theta] is the normal force.
+
+=== 2.3 Edge Mechanics
+
+**Definition 2.5** (Edge Angle): Leaning angle from vertical:
+[stem]
+++++
+\theta_{\text{edge}} \in [-45°, 45°] \quad \text{(typical range)}
+++++
+
+**Definition 2.6** (Turning Radius): From edge angle and velocity:
+[stem]
+++++
+r = \frac{v^2}{g \tan\theta_{\text{edge}}}
+++++
+
+**Theorem 2.1** (Minimum Turn Radius): The minimum sustainable turn radius is:
+[stem]
+++++
+r_{\min} = \frac{v^2}{g \mu_{\perp}}
+++++
+
+=== 2.4 Ice Surface Properties
+
+**Definition 2.7** (Ice Temperature Effect):
+[stem]
+++++
+\mu(T) = \mu_0 + \alpha(T - T_0)
+++++
+
+Optimal ice temperature: stem:[T \approx -5°C] to stem:[-7°C]
+
+**Definition 2.8** (Surface Condition): Friction coefficient varies with:
+- Freshly resurfaced: stem:[\mu \approx 0.003]
+- After warm-up: stem:[\mu \approx 0.007]
+- Snow accumulation: stem:[\mu \approx 0.01]
+
+== 3. Translational Motion
+
+=== 3.1 Gliding
+
+**Definition 3.1** (Glide Equation):
+[stem]
+++++
+m\frac{dv}{dt} = -\mu_{\parallel} mg - \frac{1}{2}\rho C_D A v^2
+++++
+
+**Solution 3.1** (Velocity Decay):
+[stem]
+++++
+v(t) = v_0 e^{-\frac{\mu_{\parallel} g}{v_0} t} \cdot \frac{1}{1 + \frac{\rho C_D A v_0}{2m\mu_{\parallel} g}(1 - e^{-\frac{\mu_{\parallel} g}{v_0} t})}
+++++
+
+For low air resistance, approximately:
+[stem]
+++++
+v(t) \approx v_0 - \mu_{\parallel} g t
+++++
+
+=== 3.2 Stroking (Propulsion)
+
+**Definition 3.2** (Push Force): Power stroke generates:
+[stem]
+++++
+F_{\text{push}} = F_{\text{leg}} \sin\theta_{\text{push}}
+++++
+
+where stem:[\theta_{\text{push}}] is the angle of the pushing leg.
+
+**Definition 3.3** (Stroking Power):
+[stem]
+++++
+P = F_{\text{push}} \cdot v \approx 200-400\text{W} \quad \text{(elite skaters)}
+++++
+
+**Definition 3.4** (Maximum Speed): Terminal velocity:
+[stem]
+++++
+v_{\max} = \sqrt{\frac{2P}{\rho C_D A}}
+++++
+
+Typically stem:[v_{\max} \approx 8-10\text{m/s}] for elite skaters.
+
+=== 3.3 Crossovers
+
+**Definition 3.5** (Crossover Dynamics): Acceleration during crossover:
+[stem]
+++++
+a_{\text{cross}} = \frac{F_{\text{inside}} + F_{\text{outside}}}{m} - \frac{v^2}{r}
+++++
+
+where stem:[v^2/r] is centripetal acceleration requirement.
+
+== 4. Rotational Dynamics
+
+=== 4.1 Angular Momentum Conservation
+
+**Theorem 4.1** (Conservation): In the absence of external torques:
+[stem]
+++++
+L = I\omega = \text{constant}
+++++
+
+**Corollary 4.1** (Spin Speed-Up): Reducing moment of inertia increases angular velocity:
+[stem]
+++++
+\omega_2 = \omega_1 \cdot \frac{I_1}{I_2}
+++++
+
+=== 4.2 Moment of Inertia Configurations
+
+**Definition 4.1** (Body Configurations):
+
+[cols="2,1,1"]
+|===
+|Position |stem:[I] (kg·m²) |Description
+
+|Arms extended |3.5 - 4.5 |Maximum
+|Arms at sides |1.5 - 2.0 |Intermediate
+|Arms overhead (pencil) |0.8 - 1.2 |Minimum
+|===
+
+**Definition 4.2** (Moment of Inertia Calculation):
+[stem]
+++++
+I = \sum_i m_i r_i^2 = \int r^2 dm
+++++
+
+=== 4.3 Spin Dynamics
+
+**Definition 4.3** (Spin Entry): Initial angular momentum from edge:
+[stem]
+++++
+L_{\text{entry}} = m v r_{\text{entry}}
+++++
+
+where stem:[r_{\text{entry}}] is the entry curve radius.
+
+**Definition 4.4** (Spin Rate Evolution):
+[stem]
+++++
+\omega(t) = \omega_0 \cdot \frac{I_0}{I(t)}
+++++
+
+**Definition 4.5** (Revolution Count):
+[stem]
+++++
+N = \frac{1}{2\pi} \int_0^T \omega(t) dt
+++++
+
+=== 4.4 Precession and Nutation
+
+**Definition 4.6** (Precession): When rotation axis tilts:
+[stem]
+++++
+\Omega_{\text{prec}} = \frac{\tau}{L} = \frac{mgl_{\text{cm}} \sin\theta}{I\omega}
+++++
+
+This causes "traveling" spins if not controlled.
+
+== 5. Jump Mechanics
+
+=== 5.1 Takeoff Phase
+
+**Definition 5.1** (Takeoff Force): Ground reaction force:
+[stem]
+++++
+F_{\text{takeoff}} = m(g + a_{\text{vertical}}) \approx 3-5 \times mg
+++++
+
+**Definition 5.2** (Takeoff Velocity Components):
+[stem]
+++++
+\begin{align}
+v_x &= v_{\text{approach}} \cos\theta_{\text{launch}} \\
+v_y &= v_{\text{approach}} \sin\theta_{\text{launch}} + v_{\text{push}}
+\end{align}
+++++
+
+**Definition 5.3** (Initial Angular Velocity): From pre-rotation and edge:
+[stem]
+++++
+\omega_0 = \omega_{\text{pre}} + \frac{\tau_{\text{pickup}} \cdot t_{\text{contact}}}{I}
+++++
+
+=== 5.2 Flight Phase
+
+**Definition 5.4** (Projectile Motion): Neglecting air resistance:
+[stem]
+++++
+\begin{align}
+x(t) &= x_0 + v_{x,0} t \\
+y(t) &= y_0 + v_{y,0} t - \frac{1}{2}gt^2
+\end{align}
+++++
+
+**Definition 5.5** (Flight Time):
+[stem]
+++++
+T_{\text{flight}} = \frac{2v_{y,0}}{g}
+++++
+
+**Definition 5.6** (Maximum Height):
+[stem]
+++++
+h_{\max} = \frac{v_{y,0}^2}{2g}
+++++
+
+Typical values: stem:[h_{\max} \approx 0.4-0.7\text{m}] for elite jumps.
+
+=== 5.3 Rotation Requirements
+
+**Theorem 5.1** (Rotation Requirement): To complete stem:[n] rotations:
+[stem]
+++++
+\omega \geq \frac{2\pi n}{T_{\text{flight}}}
+++++
+
+**Definition 5.7** (Angular Velocity by Jump Type):
+
+[cols="1,1,1,1"]
+|===
+|Rotations |Flight Time (s) |Required ω (rad/s) |RPM
+
+|1 |0.5 |12.6 |120
+|2 |0.6 |20.9 |200
+|3 |0.7 |26.9 |257
+|4 |0.8 |31.4 |300
+|===
+
+=== 5.4 Jump-Specific Mechanics
+
+**Definition 5.8** (Axel):
+- Half-rotation extra (forward takeoff, backward landing)
+- stem:[n + 0.5] rotations for n-rotation Axel
+
+**Definition 5.9** (Toe Jumps vs. Edge Jumps):
+
+Toe picks (Lutz, Flip, Toe Loop):
+[stem]
+++++
+F_{\text{takeoff}} = F_{\text{leg}} + F_{\text{toe pick}}
+++++
+
+Edge jumps (Axel, Salchow, Loop):
+[stem]
+++++
+F_{\text{takeoff}} = F_{\text{leg}} \quad \text{(edge only)}
+++++
+
+=== 5.5 Landing Phase
+
+**Definition 5.10** (Landing Force):
+[stem]
+++++
+F_{\text{landing}} = m(g + \frac{v_y}{\Delta t}) \approx 5-8 \times mg
+++++
+
+**Definition 5.11** (Landing Velocity):
+[stem]
+++++
+v_{\text{landing}} = \sqrt{v_{x,0}^2 + (v_{y,0} - gT)^2}
+++++
+
+**Constraint 5.1** (Survivable Landing): Landing deceleration must satisfy:
+[stem]
+++++
+a_{\text{landing}} < a_{\max} \approx 10g
+++++
+
+=== 5.6 Under-rotation Analysis
+
+**Definition 5.12** (Rotation Deficit):
+[stem]
+++++
+\delta = n \cdot 360° - \theta_{\text{actual}}
+++++
+
+ISU thresholds:
+- stem:[\delta < 90°]: Clean jump
+- stem:[90° \leq \delta < 180°]: Under-rotated (stem:[q] mark)
+- stem:[\delta \geq 180°]: Downgraded (stem:[<] mark)
+
+== 6. Energy Analysis
+
+=== 6.1 Energy Budget
+
+**Definition 6.1** (Jump Energy):
+[stem]
+++++
+E_{\text{jump}} = \frac{1}{2}mv^2 + mgh + \frac{1}{2}I\omega^2
+++++
+
+**Definition 6.2** (Energy Partition):
+[stem]
+++++
+\begin{align}
+E_{\text{translational}} &= \frac{1}{2}m(v_x^2 + v_y^2) \\
+E_{\text{gravitational}} &= mgh \\
+E_{\text{rotational}} &= \frac{1}{2}I\omega^2
+\end{align}
+++++
+
+=== 6.2 Metabolic Cost
+
+**Definition 6.3** (Power Output):
+[stem]
+++++
+P_{\text{metabolic}} = P_{\text{mechanical}} / \eta
+++++
+
+where stem:[\eta \approx 0.25] is mechanical efficiency.
+
+**Definition 6.4** (Energy Cost per Element):
+[stem]
+++++
+E_{\text{element}} = \int_0^T P_{\text{metabolic}}(t) dt
+++++
+
+=== 6.3 Fatigue Model
+
+**Definition 6.5** (Anaerobic Depletion):
+[stem]
+++++
+\frac{dA}{dt} = -k_A \cdot P + r_A \cdot (A_{\max} - A)
+++++
+
+where stem:[A] is anaerobic capacity.
+
+**Definition 6.6** (Performance Degradation):
+[stem]
+++++
+v_{\max}(t) = v_{\max,0} \cdot f(A(t))
+++++
+
+This models the strategic placement of elements (harder elements earlier).
+
+== 7. Air Resistance
+
+=== 7.1 Drag Force
+
+**Definition 7.1** (Quadratic Drag):
+[stem]
+++++
+\vec{F}_D = -\frac{1}{2}\rho C_D A \|\vec{v}\|^2 \hat{v}
+++++
+
+Parameters:
+- stem:[\rho = 1.2 \text{ kg/m}^3] (air density)
+- stem:[C_D \approx 0.8-1.2] (drag coefficient, depends on posture)
+- stem:[A \approx 0.4-0.7 \text{ m}^2] (frontal area)
+
+=== 7.2 Drag During Jumps
+
+**Definition 7.2** (Jump Drag Effect): Horizontal velocity loss:
+[stem]
+++++
+\Delta v_x = \int_0^{T} \frac{F_D}{m} dt \approx \frac{\rho C_D A v_0^2 T}{2m}
+++++
+
+Typically stem:[\Delta v_x \approx 0.1-0.2 \text{ m/s}] (small but non-negligible).
+
+=== 7.3 Drag During Spins
+
+**Definition 7.3** (Rotational Drag Torque):
+[stem]
+++++
+\tau_D = -k_{\omega} \omega^2
+++++
+
+Causes spin deceleration: stem:[\omega(t) = \omega_0 / (1 + \omega_0 k t / I)]
+
+== 8. Biomechanical Constraints
+
+=== 8.1 Anthropometric Model
+
+**Definition 8.1** (Segmental Inertia): Body modeled as linked rigid segments:
+
+[cols="2,1,1,1"]
+|===
+|Segment |Mass (% body) |Length (% height) |I (% total)
+
+|Head + Neck |8% |10% |3%
+|Trunk |50% |30% |40%
+|Upper Arm |3% |18% |2%
+|Forearm + Hand |2% |25% |2%
+|Thigh |10% |26% |12%
+|Shank + Foot |5% |29% |8%
+|===
+
+=== 8.2 Joint Limits
+
+**Definition 8.2** (Range of Motion):
+
+[cols="2,2,2"]
+|===
+|Joint |Motion |Range
+
+|Hip |Flexion/Extension |−30° to 120°
+|Hip |Abduction |0° to 45°
+|Knee |Flexion |0° to 140°
+|Ankle |Plantarflexion/Dorsiflexion |−50° to 30°
+|Spine |Lateral flexion |0° to 45°
+|Shoulder |Elevation |0° to 180°
+|===
+
+=== 8.3 Force Limits
+
+**Definition 8.3** (Maximum Muscle Force):
+[stem]
+++++
+F_{\max} = \sigma_{\max} \cdot A_{\text{muscle}}
+++++
+
+where stem:[\sigma_{\max} \approx 30-100 \text{ N/cm}^2].
+
+**Definition 8.4** (Peak Landing Force): Must satisfy:
+[stem]
+++++
+F_{\text{landing}} < F_{\text{structural limit}} \approx 10-15 \times \text{body weight}
+++++
+
+=== 8.4 Balance and Stability
+
+**Definition 8.5** (Balance Criterion): Center of mass projection within base of support:
+[stem]
+++++
+\vec{r}_{\text{COM,proj}} \in \mathcal{B}_{\text{support}}
+++++
+
+**Definition 8.6** (Stability Margin):
+[stem]
+++++
+d_{\text{stability}} = \min_{\vec{p} \in \partial\mathcal{B}} \|\vec{r}_{\text{COM,proj}} - \vec{p}\|
+++++
+
+== 9. Numerical Methods
+
+=== 9.1 Integration Schemes
+
+**Definition 9.1** (Euler Method):
+[stem]
+++++
+\vec{x}_{n+1} = \vec{x}_n + h \cdot \vec{f}(\vec{x}_n, t_n)
+++++
+
+Accuracy: stem:[O(h)], not suitable for precision.
+
+**Definition 9.2** (Runge-Kutta 4):
+[stem]
+++++
+\begin{align}
+\vec{k}_1 &= \vec{f}(\vec{x}_n, t_n) \\
+\vec{k}_2 &= \vec{f}(\vec{x}_n + \frac{h}{2}\vec{k}_1, t_n + \frac{h}{2}) \\
+\vec{k}_3 &= \vec{f}(\vec{x}_n + \frac{h}{2}\vec{k}_2, t_n + \frac{h}{2}) \\
+\vec{k}_4 &= \vec{f}(\vec{x}_n + h\vec{k}_3, t_n + h) \\
+\vec{x}_{n+1} &= \vec{x}_n + \frac{h}{6}(\vec{k}_1 + 2\vec{k}_2 + 2\vec{k}_3 + \vec{k}_4)
+\end{align}
+++++
+
+Accuracy: stem:[O(h^4)], good for smooth dynamics.
+
+=== 9.2 Constraint Handling
+
+**Definition 9.3** (Baumgarte Stabilization): For constraint stem:[C(\vec{q}) = 0]:
+[stem]
+++++
+\ddot{C} + 2\alpha\dot{C} + \beta^2 C = 0
+++++
+
+Prevents constraint drift in numerical integration.
+
+=== 9.3 Contact Dynamics
+
+**Definition 9.4** (Penalty Method): Contact force:
+[stem]
+++++
+F_c = k_p \cdot \max(0, -d) + k_d \cdot \dot{d}
+++++
+
+where stem:[d] is penetration depth.
+
+== 10. TODO: Incomplete Specifications
+
+[WARNING]
+====
+The following physics aspects require further development:
+
+* [ ] **§2** - Experimental validation of friction model
+* [ ] **§4** - Detailed precession analysis for traveling spins
+* [ ] **§5** - Wind tunnel data for jump aerodynamics
+* [ ] **§6** - Validated fatigue model parameters
+* [ ] **§8** - Individual skater anthropometric calibration
+* [ ] **§9** - Symplectic integrators for long-term stability
+* [ ] **§11** - Stochastic physics for uncertainty analysis
+* [ ] **§12** - Musculoskeletal simulation integration
+====
+
+== 11. References
+
+1. King, D., et al. "Biomechanics of Figure Skating." _Sports Biomechanics_, 2004.
+2. Lockwood, K. & Gervais, P. "Impact Forces upon Landing Single, Double, and Triple Revolution Jumps." _Clinical Biomechanics_, 1997.
+3. Albert, W. & Miller, D. "Takeoff Characteristics of Single and Double Axel Figure Skating Jumps." _Journal of Applied Biomechanics_, 1996.
+4. de Koning, J. J., et al. "Ice Friction During Speed Skating." _Journal of Biomechanics_, 1992.
+5. Winter, D. A. _Biomechanics and Motor Control of Human Movement_. Wiley, 2009.
+
+---
+
+_Document Version: 0.1.0-draft_
+_Last Updated: 2025-01-01_

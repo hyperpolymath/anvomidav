@@ -1,0 +1,693 @@
+// SPDX-FileCopyrightText: 2025 hyperpolymath
+// SPDX-License-Identifier: MIT OR AGPL-3.0-or-later
+
+= Formal Specification of ISU Technical Rules
+:toc: macro
+:toc-title: Contents
+:toclevels: 4
+:sectnums:
+:stem: latexmath
+
+== Abstract
+
+This document provides a formal specification of the International Skating Union (ISU) technical rules for figure skating, encoded as logical predicates, type constraints, and validation functions. This formalization enables compile-time verification of ISU compliance, automated base value calculation, and Grade of Execution (GOE) estimation. The specification covers singles, pairs, and ice dance disciplines.
+
+toc::[]
+
+== 1. Foundational Definitions
+
+=== 1.1 Element Taxonomy
+
+**Definition 1.1** (Element Categories):
+[stem]
+++++
+\mathsf{Element} = \mathsf{Jump} + \mathsf{Spin} + \mathsf{Step} + \mathsf{Lift} + \mathsf{Other}
+++++
+
+**Definition 1.2** (Execution Quality):
+[stem]
+++++
+\mathsf{Quality} = \{-5, -4, -3, -2, -1, 0, +1, +2, +3, +4, +5\}
+++++
+
+**Definition 1.3** (Technical Level):
+[stem]
+++++
+\mathsf{Level} = \{\texttt{B}, \texttt{1}, \texttt{2}, \texttt{3}, \texttt{4}\}
+++++
+
+with ordering: stem:[\texttt{B} < \texttt{1} < \texttt{2} < \texttt{3} < \texttt{4}]
+
+=== 1.2 Program Types
+
+**Definition 1.4** (Program Categories):
+[stem]
+++++
+\begin{align}
+\mathsf{Program} &= \mathsf{ShortProgram} + \mathsf{FreeSkating} \\
+\mathsf{ShortProgram} &: \mathsf{RequiredElements} \to \mathsf{Timeline} \\
+\mathsf{FreeSkating} &: \mathsf{WellBalancedProgram} \to \mathsf{Timeline}
+\end{align}
+++++
+
+**Definition 1.5** (Competition Level):
+[stem]
+++++
+\mathsf{CompLevel} = \{\texttt{Senior}, \texttt{Junior}, \texttt{Novice}, \texttt{Intermediate}, \texttt{Pre-Juvenile}\}
+++++
+
+== 2. Jump Rules
+
+=== 2.1 Jump Classification
+
+**Definition 2.1** (Jump Types):
+[stem]
+++++
+\mathsf{JumpType} = \{\texttt{A}, \texttt{Lz}, \texttt{F}, \texttt{Lo}, \texttt{S}, \texttt{T}, \texttt{Eu}\}
+++++
+
+**Definition 2.2** (Rotation Count):
+[stem]
+++++
+\mathsf{Rotations} = \{1, 2, 3, 4\} \times \{\texttt{Full}, \texttt{Under}, \texttt{Downgrade}\}
+++++
+
+**Definition 2.3** (Edge Jump vs. Toe Jump):
+[stem]
+++++
+\begin{align}
+\mathsf{ToeJump} &= \{\texttt{T}, \texttt{F}, \texttt{Lz}\} \\
+\mathsf{EdgeJump} &= \{\texttt{A}, \texttt{Lo}, \texttt{S}, \texttt{Eu}\}
+\end{align}
+++++
+
+=== 2.2 Entry Edge Requirements
+
+**Rule 2.1** (Correct Entry Edges):
+[stem]
+++++
+\begin{align}
+\mathsf{entry}(\texttt{A}) &= \texttt{LFO} \\
+\mathsf{entry}(\texttt{Lz}) &= \texttt{LBO} \\
+\mathsf{entry}(\texttt{F}) &= \texttt{LBI} \\
+\mathsf{entry}(\texttt{Lo}) &= \texttt{RBI} \\
+\mathsf{entry}(\texttt{S}) &= \texttt{LBI} \\
+\mathsf{entry}(\texttt{T}) &= \texttt{RBO}
+\end{align}
+++++
+
+**Definition 2.4** (Edge Call Predicate):
+[stem]
+++++
+\mathsf{wrong\_edge}(j) \iff \mathsf{actual\_edge}(j) \neq \mathsf{entry}(j.\mathsf{type})
+++++
+
+Specific cases:
+- Lutz on inside edge → Flutz (stem:[e] call)
+- Flip on outside edge → Lip (stem:[e] call)
+
+=== 2.3 Rotation Assessment
+
+**Definition 2.5** (Rotation Deficit):
+[stem]
+++++
+\delta(j) = n(j) \times 360° - \theta_{\text{actual}}(j)
+++++
+
+**Rule 2.2** (Rotation Marking):
+[stem]
+++++
+\mathsf{rotation\_mark}(j) =
+\begin{cases}
+\emptyset & \text{if } \delta < 90° \\
+q & \text{if } 90° \leq \delta < 180° \\
+\texttt{<} & \text{if } \delta \geq 180°
+\end{cases}
+++++
+
+**Rule 2.3** (Downgrade Effect):
+[stem]
+++++
+\mathsf{effective\_rotations}(j) =
+\begin{cases}
+n(j) & \text{if } \mathsf{rotation\_mark}(j) = \emptyset \\
+n(j) & \text{if } \mathsf{rotation\_mark}(j) = q \text{ (reduced GOE)} \\
+n(j) - 1 & \text{if } \mathsf{rotation\_mark}(j) = \texttt{<}
+\end{cases}
+++++
+
+=== 2.4 Base Values
+
+**Definition 2.6** (Base Value Table):
+
+[cols="1,1,1,1,1"]
+|===
+|Jump |1 rotation |2 rotations |3 rotations |4 rotations
+
+|Axel |1.10 |3.30 |8.00 |12.50
+|Lutz |0.60 |2.10 |5.90 |11.50
+|Flip |0.50 |1.80 |5.30 |11.00
+|Loop |0.50 |1.70 |4.90 |10.50
+|Salchow |0.40 |1.30 |4.30 |9.70
+|Toe Loop |0.40 |1.30 |4.20 |9.50
+|Euler |0.50 |— |— |—
+|===
+
+**Definition 2.7** (Base Value Function):
+[stem]
+++++
+\mathsf{BV}: \mathsf{Jump} \to \mathbb{R}_{\geq 0}
+++++
+
+=== 2.5 Jump Combinations and Sequences
+
+**Rule 2.4** (Valid Combination):
+[stem]
+++++
+\mathsf{valid\_combo}(j_1, j_2, \ldots, j_n) \iff
+\begin{cases}
+n \leq 3 \\
+\forall i > 1: j_i.\mathsf{type} \in \{\texttt{T}, \texttt{Lo}\} \lor j_{i-1}.\mathsf{type} = \texttt{Eu}
+\end{cases}
+++++
+
+**Rule 2.5** (Euler Rule): An Euler (half-loop) allows any jump to follow:
+[stem]
+++++
+j_1\ \texttt{Eu}\ j_2 \implies j_2.\mathsf{type} \in \{\texttt{A}, \texttt{Lz}, \texttt{F}, \texttt{Lo}, \texttt{S}, \texttt{T}\}
+++++
+
+**Definition 2.8** (Combination Base Value):
+[stem]
+++++
+\mathsf{BV}(\texttt{combo}(j_1, \ldots, j_n)) = \sum_{i=1}^n \mathsf{BV}(j_i)
+++++
+
+**Rule 2.6** (Jump Sequence): Connected by non-listed jump or turn:
+[stem]
+++++
+\mathsf{BV}(\texttt{seq}(j_1, j_2)) = 0.8 \times (\mathsf{BV}(j_1) + \mathsf{BV}(j_2))
+++++
+
+=== 2.6 Repeated Jump Restrictions
+
+**Rule 2.7** (Zayak Rule - Senior Singles Free):
+[stem]
+++++
+\begin{align}
+&\forall j_t \in \{\texttt{Lz}, \texttt{F}, \texttt{Lo}, \texttt{S}, \texttt{T}\}: |\{j \mid j.\mathsf{type} = j_t \land j.\mathsf{rotations} = 3\}| \leq 2 \\
+&\forall j_t: |\{j \mid j.\mathsf{type} = j_t \land j.\mathsf{rotations} = 4\}| \leq 2 \\
+&|\{j_t \mid \text{repeated with } n \geq 3\}| \leq 2 \\
+&\text{Second repetition must be in combination}
+\end{align}
+++++
+
+**Definition 2.9** (Zayak Compliance):
+[stem]
+++++
+\mathsf{zayak\_ok}(\mathsf{program}) \iff \text{all repetition rules satisfied}
+++++
+
+=== 2.7 Bonus for Second Half
+
+**Rule 2.8** (Second Half Bonus):
+[stem]
+++++
+\mathsf{bonus}(j) =
+\begin{cases}
+1.10 \times \mathsf{BV}(j) & \text{if } t(j) > \frac{T_{\text{program}}}{2} \\
+\mathsf{BV}(j) & \text{otherwise}
+\end{cases}
+++++
+
+== 3. Spin Rules
+
+=== 3.1 Spin Classification
+
+**Definition 3.1** (Basic Spin Positions):
+[stem]
+++++
+\mathsf{SpinPosition} = \{\texttt{Upright}, \texttt{Sit}, \texttt{Camel}, \texttt{Layback}, \texttt{Biellmann}\}
+++++
+
+**Definition 3.2** (Spin Types):
+[stem]
+++++
+\begin{align}
+\mathsf{SpinType} &= \mathsf{SinglePosition} + \mathsf{Combination} + \mathsf{Flying} \\
+\mathsf{SinglePosition} &= \mathsf{SpinPosition} \\
+\mathsf{Combination} &= \mathsf{SpinPosition}^{+} \quad (\text{at least 2 positions})
+\end{align}
+++++
+
+=== 3.2 Level Features
+
+**Definition 3.3** (Level Features):
+[stem]
+++++
+\mathsf{Feature} = \{\texttt{diff\_var}, \texttt{diff\_entry}, \texttt{jump\_spin}, \texttt{difficult\_pos}, \\
+\qquad\qquad\quad \texttt{8\_revs}, \texttt{clear\_edge}, \texttt{both\_feet}, \ldots\}
+++++
+
+**Rule 3.1** (Level Determination):
+[stem]
+++++
+\mathsf{level}(s) =
+\begin{cases}
+\texttt{4} & \text{if } |\mathsf{features}(s)| \geq 4 \\
+\texttt{3} & \text{if } |\mathsf{features}(s)| = 3 \\
+\texttt{2} & \text{if } |\mathsf{features}(s)| = 2 \\
+\texttt{1} & \text{if } |\mathsf{features}(s)| = 1 \\
+\texttt{B} & \text{if } |\mathsf{features}(s)| = 0
+\end{cases}
+++++
+
+=== 3.3 Spin Requirements
+
+**Rule 3.2** (Minimum Revolutions):
+[stem]
+++++
+\begin{align}
+\mathsf{revs\_required}(\texttt{basic}) &\geq 6 \\
+\mathsf{revs\_required}(\texttt{combination}) &\geq 10 \text{ (total)} \\
+\mathsf{revs\_per\_position} &\geq 2
+\end{align}
+++++
+
+**Rule 3.3** (Position Requirements):
+[stem]
+++++
+\begin{align}
+\mathsf{valid\_sit} &\iff \theta_{\text{thigh}} \leq \text{horizontal} \\
+\mathsf{valid\_camel} &\iff \theta_{\text{free leg}} \geq \text{horizontal} \\
+\mathsf{valid\_layback} &\iff \theta_{\text{back arch}} \geq 90°
+\end{align}
+++++
+
+=== 3.4 Spin Base Values
+
+**Definition 3.4** (Spin Base Value Table):
+
+[cols="2,1,1,1,1,1"]
+|===
+|Spin |B |1 |2 |3 |4
+
+|Upright (USp) |1.00 |1.20 |1.50 |1.90 |2.40
+|Sit (SSp) |1.10 |1.30 |1.60 |2.10 |2.50
+|Camel (CSp) |1.10 |1.40 |1.80 |2.30 |2.80
+|Flying Sit (FSSp) |1.70 |2.00 |2.30 |2.60 |3.00
+|Combination (CCoSp) |1.70 |2.00 |2.50 |3.00 |3.50
+|===
+
+== 4. Step Sequence Rules
+
+=== 4.1 Step Sequence Classification
+
+**Definition 4.1** (Step Types):
+[stem]
+++++
+\mathsf{StepType} = \{\texttt{3Turn}, \texttt{Twizzle}, \texttt{Bracket}, \texttt{Loop}, \texttt{Counter}, \texttt{Rocker}, \texttt{Choctaw}, \texttt{Mohawk}\}
+++++
+
+**Definition 4.2** (Difficulty Classification):
+[stem]
+++++
+\begin{align}
+\mathsf{Difficult} &= \{\texttt{Bracket}, \texttt{Counter}, \texttt{Rocker}, \texttt{Twizzle}\} \\
+\mathsf{Simple} &= \{\texttt{3Turn}, \texttt{Mohawk}, \texttt{Choctaw}\}
+\end{align}
+++++
+
+=== 4.2 Level Features
+
+**Rule 4.1** (Step Sequence Level):
+[stem]
+++++
+\mathsf{level}(\mathsf{StSq}) = f(\mathsf{variety}, \mathsf{difficulty}, \mathsf{rotational}, \mathsf{body\_movement})
+++++
+
+Level 4 requires:
+- Variety of turns and steps
+- Rotational movement in both directions
+- Use of body movements throughout
+- Difficulty throughout
+
+=== 4.3 Base Values
+
+**Definition 4.3** (Step Sequence Values):
+
+[cols="2,1,1,1,1,1"]
+|===
+|Type |B |1 |2 |3 |4
+
+|Step Sequence (StSq) |1.50 |1.80 |2.60 |3.30 |3.90
+|Choreographic Seq. (ChSq) |3.00 |— |— |— |—
+|===
+
+== 5. Pairs-Specific Rules
+
+=== 5.1 Lift Classification
+
+**Definition 5.1** (Lift Groups):
+[stem]
+++++
+\mathsf{LiftGroup} = \{1, 2, 3, 4, 5\}
+++++
+
+- Group 1-2: Armpit holds
+- Group 3-4: Waist holds
+- Group 5: Hand-to-hand
+
+**Definition 5.2** (Lift Types):
+[stem]
+++++
+\mathsf{LiftType} = \mathsf{LiftGroup} \times \mathsf{Position} \times \mathsf{Entry}
+++++
+
+=== 5.2 Lift Requirements
+
+**Rule 5.1** (Lift Duration):
+[stem]
+++++
+\mathsf{duration}(\mathsf{lift}) \leq 12 \text{ seconds (free skating)}
+++++
+
+**Rule 5.2** (Carry Lift Limit):
+[stem]
+++++
+|\{l \mid \mathsf{is\_carry}(l)\}| \leq 1 \text{ per program}
+++++
+
+=== 5.3 Throw Jump Rules
+
+**Definition 5.3** (Throw Jumps):
+[stem]
+++++
+\mathsf{ThrowType} = \{\texttt{ThLz}, \texttt{ThF}, \texttt{ThLo}, \texttt{ThS}, \texttt{ThA}\}
+++++
+
+**Rule 5.3** (Throw Validity):
+[stem]
+++++
+\mathsf{valid\_throw}(th) \iff \mathsf{assisted\_takeoff}(th) \land \mathsf{lady\_landing}(th)
+++++
+
+=== 5.4 Death Spiral Rules
+
+**Definition 5.4** (Death Spiral Types):
+[stem]
+++++
+\mathsf{DeathSpiral} = \{\texttt{BFi}, \texttt{BFo}, \texttt{FFi}, \texttt{FFo}\}
+++++
+
+**Rule 5.4** (Death Spiral Requirements):
+[stem]
+++++
+\begin{align}
+\mathsf{revolutions} &\geq 1 \\
+\mathsf{lady\_position} &= \text{horizontal or below} \\
+\mathsf{man\_pivot} &= \text{on pivot position}
+\end{align}
+++++
+
+== 6. Ice Dance-Specific Rules
+
+=== 6.1 Dance Elements
+
+**Definition 6.1** (Rhythm Dance Elements):
+[stem]
+++++
+\mathsf{RD\_Elements} = \{\mathsf{PatternDance}, \mathsf{Twizzles}, \mathsf{Steps}, \mathsf{Lift}\}
+++++
+
+**Definition 6.2** (Free Dance Elements):
+[stem]
+++++
+\mathsf{FD\_Elements} = \{\mathsf{Lifts}, \mathsf{Twizzles}, \mathsf{Steps}, \mathsf{Choreo}\}
+++++
+
+=== 6.2 Lift Rules
+
+**Rule 6.1** (Dance Lift Duration):
+[stem]
+++++
+\begin{align}
+\mathsf{short\_lift} &\leq 6 \text{ seconds} \\
+\mathsf{rotational\_lift} &\leq 6 \text{ seconds} \\
+\mathsf{combination\_lift} &\leq 12 \text{ seconds}
+\end{align}
+++++
+
+**Rule 6.2** (Lift Positions):
+[stem]
+++++
+\mathsf{valid\_dance\_lift} \iff \mathsf{lady\_height} \leq \mathsf{shoulder\_level}
+++++
+
+=== 6.3 Twizzle Rules
+
+**Rule 6.3** (Synchronized Twizzles):
+[stem]
+++++
+\mathsf{synch\_twizzle} \iff
+\begin{cases}
+\mathsf{both\_rotating} \\
+\mathsf{within\_arm\_length} \\
+\mathsf{matching\_rotations}
+\end{cases}
+++++
+
+== 7. Program Structure Rules
+
+=== 7.1 Short Program Requirements (Singles)
+
+**Rule 7.1** (Senior Short Program):
+[stem]
+++++
+\begin{align}
+&\text{1 double or triple Axel} \\
+&\text{1 triple-triple or triple-double combination} \\
+&\text{1 triple jump} \\
+&\text{1 flying spin} \\
+&\text{1 spin with only one position} \\
+&\text{1 combination spin with change of foot} \\
+&\text{1 step sequence}
+\end{align}
+++++
+
+**Definition 7.1** (Short Program Compliance):
+[stem]
+++++
+\mathsf{SP\_valid}(p) \iff \bigwedge_{r \in \mathsf{SP\_requirements}} \mathsf{satisfies}(p, r)
+++++
+
+=== 7.2 Free Skating Requirements (Singles)
+
+**Rule 7.2** (Well-Balanced Program):
+[stem]
+++++
+\begin{align}
+|\mathsf{jumps}(p)| &\leq 7 \text{ (ladies) or } 8 \text{ (men)} \\
+|\mathsf{jump\_combos}(p)| &\leq 3 \\
+|\mathsf{spins}(p)| &= 3 \\
+|\mathsf{step\_sequences}(p)| &= 1 \\
+|\mathsf{choreo\_sequences}(p)| &= 1
+\end{align}
+++++
+
+=== 7.3 Program Duration
+
+**Rule 7.3** (Time Limits):
+[stem]
+++++
+\begin{align}
+\mathsf{duration}(\mathsf{SP}, \mathsf{Senior}) &= 2:40 \pm 0:10 \\
+\mathsf{duration}(\mathsf{FS}, \mathsf{Senior}, \mathsf{Men}) &= 4:00 \pm 0:10 \\
+\mathsf{duration}(\mathsf{FS}, \mathsf{Senior}, \mathsf{Ladies}) &= 4:00 \pm 0:10
+\end{align}
+++++
+
+== 8. Grade of Execution
+
+=== 8.1 GOE Scale
+
+**Definition 8.1** (GOE Range):
+[stem]
+++++
+\mathsf{GOE} \in \{-5, -4, -3, -2, -1, 0, +1, +2, +3, +4, +5\}
+++++
+
+**Definition 8.2** (GOE Value):
+[stem]
+++++
+\mathsf{GOE\_value}(e, g) = g \times \mathsf{GOE\_factor}(e)
+++++
+
+=== 8.2 Positive GOE Criteria
+
+**Definition 8.3** (Positive Aspects - Jumps):
+[stem]
+++++
+\mathsf{positive}(j) \subseteq \{
+\begin{aligned}
+&\texttt{good\_height\_distance}, \\
+&\texttt{good\_takeoff\_landing}, \\
+&\texttt{effortless}, \\
+&\texttt{good\_extension}, \\
+&\texttt{matched\_to\_music}
+\end{aligned}
+\}
+++++
+
+**Rule 8.1** (GOE Bullet Count):
+[stem]
+++++
+\mathsf{GOE\_cap}(e) = \min(|\mathsf{positive}(e)|, 5)
+++++
+
+=== 8.3 Negative GOE Criteria
+
+**Definition 8.4** (Errors):
+[stem]
+++++
+\begin{align}
+\mathsf{fall} &\implies \mathsf{GOE} \leq -4 \\
+\mathsf{step\_out} &\implies \mathsf{GOE} -= 3 \text{ to } 4 \\
+\mathsf{hand\_down} &\implies \mathsf{GOE} -= 2 \text{ to } 3 \\
+\mathsf{under\_rotated} &\implies \mathsf{GOE} -= 1 \text{ to } 3
+\end{align}
+++++
+
+=== 8.4 GOE Calculation
+
+**Definition 8.5** (Final GOE):
+[stem]
+++++
+\mathsf{final\_GOE}(e) = \mathsf{median}(\mathsf{panel\_GOEs}(e)) \times \mathsf{factor}(e)
+++++
+
+where panel GOEs have highest and lowest trimmed.
+
+== 9. Program Component Scores
+
+=== 9.1 Component Categories
+
+**Definition 9.1** (Components):
+[stem]
+++++
+\mathsf{Components} = \{
+\begin{aligned}
+&\texttt{SkatingSkills}, \\
+&\texttt{Transitions}, \\
+&\texttt{Performance}, \\
+&\texttt{Composition}, \\
+&\texttt{Interpretation}
+\end{aligned}
+\}
+++++
+
+=== 9.2 Component Factors
+
+**Definition 9.2** (Factor Table):
+
+[cols="2,1,1,1,1"]
+|===
+|Discipline |SS |TR |PE |CO/IN
+
+|Men SP |1.00 |1.00 |1.00 |1.00
+|Men FS |2.00 |2.00 |2.00 |2.00
+|Ladies SP |0.80 |0.80 |0.80 |0.80
+|Ladies FS |1.60 |1.60 |1.60 |1.60
+|===
+
+== 10. Deduction Rules
+
+=== 10.1 Fall Deduction
+
+**Rule 10.1** (Fall Penalty):
+[stem]
+++++
+\mathsf{deduction}(\mathsf{fall}) = -1.00 \text{ per fall}
+++++
+
+=== 10.2 Time Violation
+
+**Rule 10.2** (Time Deduction):
+[stem]
+++++
+\mathsf{time\_penalty}(\Delta t) =
+\begin{cases}
+0 & \text{if } \Delta t \leq 10 \text{ sec} \\
+-1.00 & \text{if } 10 < \Delta t \leq 20 \text{ sec} \\
+\ldots
+\end{cases}
+++++
+
+=== 10.3 Illegal Elements
+
+**Rule 10.3** (Illegal Element Deduction):
+[stem]
+++++
+\mathsf{illegal\_element} \implies \mathsf{no\_value} \land \mathsf{deduction}
+++++
+
+== 11. Validation Predicates
+
+=== 11.1 Complete Validation
+
+**Definition 11.1** (Program Validity):
+[stem]
+++++
+\mathsf{valid}(p) = \mathsf{structure\_ok}(p) \land \mathsf{elements\_ok}(p) \land \mathsf{time\_ok}(p)
+++++
+
+**Definition 11.2** (Element Validity):
+[stem]
+++++
+\mathsf{element\_ok}(e) = \mathsf{type\_ok}(e) \land \mathsf{execution\_ok}(e) \land \mathsf{not\_illegal}(e)
+++++
+
+=== 11.2 Type-Level Enforcement
+
+These predicates become type constraints in Anvomidav:
+
+[source]
+----
+type ValidJumpCombo<n: 2..3> = {
+    jumps: Vec<Jump, n>,
+    valid: all jumps follow combination rules
+}
+
+type ValidProgram = {
+    elements: Vec<Element>,
+    structure: StructureCompliant,
+    time: TimeCompliant
+}
+----
+
+== 12. TODO: Incomplete Specifications
+
+[WARNING]
+====
+The following ISU aspects require further development:
+
+* [ ] **§2.6** - Complete Zayak rule for all categories
+* [ ] **§3** - All spin level features (full ISU list)
+* [ ] **§5-6** - Complete pairs and ice dance rules
+* [ ] **§8** - Full GOE bullet specifications
+* [ ] **§9** - Detailed component guidelines
+* [ ] **§10** - All deduction categories
+* [ ] **§13** - Historical rule versions (for legacy programs)
+* [ ] **§14** - Rule variation by competition level
+====
+
+== 13. References
+
+1. International Skating Union. _ISU Special Regulations & Technical Rules Single & Pair Skating and Ice Dance 2024_. ISU, 2024.
+2. International Skating Union. _ISU Communication 2548_. ISU, 2024.
+3. International Skating Union. _Scale of Values and GOE_. ISU, 2024.
+
+---
+
+_Document Version: 0.1.0-draft_
+_Last Updated: 2025-01-01_

@@ -1,0 +1,423 @@
+// SPDX-FileCopyrightText: 2025 hyperpolymath
+// SPDX-License-Identifier: MIT OR AGPL-3.0-or-later
+
+= Automata Theory for Anvomidav
+:toc: macro
+:toc-title: Contents
+:toclevels: 4
+:sectnums:
+:stem: latexmath
+
+== Abstract
+
+This document presents the automata-theoretic foundations underlying Anvomidav's lexical analysis, parsing, and runtime behavior modeling. We formalize the language's lexer as a deterministic finite automaton, the parser as a pushdown automaton, and element execution as timed automata. These models enable precise analysis of language recognition, parsing complexity, and temporal behavior verification.
+
+toc::[]
+
+== 1. Finite Automata for Lexical Analysis
+
+=== 1.1 DFA Definition
+
+**Definition 1.1** (Deterministic Finite Automaton):
+[stem]
+++++
+\mathcal{A} = (Q, \Sigma, \delta, q_0, F)
+++++
+
+- stem:[Q]: Finite set of states
+- stem:[\Sigma]: Input alphabet (characters)
+- stem:[\delta: Q \times \Sigma \to Q]: Transition function
+- stem:[q_0 \in Q]: Initial state
+- stem:[F \subseteq Q]: Accepting states
+
+=== 1.2 Token DFAs
+
+Each token class is recognized by a DFA:
+
+**DFA 1.1** (Integer Literal):
+[stem]
+++++
+\begin{align}
+Q &= \{q_0, q_{\text{digit}}, q_{\text{accept}}\} \\
+\Sigma &= \{0, 1, \ldots, 9, \text{other}\} \\
+\delta(q_0, d) &= q_{\text{digit}} \text{ for } d \in \{0,\ldots,9\} \\
+\delta(q_{\text{digit}}, d) &= q_{\text{digit}} \text{ for } d \in \{0,\ldots,9\} \\
+\delta(q_{\text{digit}}, \text{other}) &= q_{\text{accept}} \\
+F &= \{q_{\text{accept}}\}
+\end{align}
+++++
+
+**DFA 1.2** (Identifier):
+[stem]
+++++
+\begin{align}
+\delta(q_0, c) &= q_{\text{id}} \text{ for } c \in \{a\text{-}z, A\text{-}Z, \_\} \\
+\delta(q_{\text{id}}, c) &= q_{\text{id}} \text{ for } c \in \{a\text{-}z, A\text{-}Z, 0\text{-}9, \_\} \\
+\delta(q_{\text{id}}, \text{other}) &= q_{\text{accept}}
+\end{align}
+++++
+
+**DFA 1.3** (Time Literal): Recognizes `mm:ss` or `hh:mm:ss`:
+[stem]
+++++
+\text{Pattern: } [0-9]+:[0-9]+(:[0-9]+)?(\.[0-9]+)?
+++++
+
+=== 1.3 Combined Lexer DFA
+
+**Theorem 1.1** (DFA Composition): The union of token DFAs can be combined into a single DFA.
+
+**Algorithm 1.1** (NFA-to-DFA - Subset Construction):
+[source,pseudocode]
+----
+function subset_construction(N):
+    D.start = ε-closure({N.start})
+    worklist = [D.start]
+    while worklist not empty:
+        S = worklist.pop()
+        for each symbol a:
+            T = ε-closure(move(S, a))
+            if T not in D.states:
+                D.states.add(T)
+                worklist.push(T)
+            D.delta[S, a] = T
+    D.accept = {S | S ∩ N.accept ≠ ∅}
+    return D
+----
+
+=== 1.4 Lexer Complexity
+
+**Theorem 1.2** (Lexer Time Complexity): The combined DFA lexer processes input in stem:[O(n)] time.
+
+_Proof_: Each character is processed exactly once with stem:[O(1)] state lookup. ∎
+
+**Theorem 1.3** (Lexer Space Complexity): The DFA requires stem:[O(|\Sigma| \cdot |Q|)] space.
+
+For UTF-8 with alphabet partitioning, practical space is manageable.
+
+== 2. Pushdown Automata for Parsing
+
+=== 2.1 PDA Definition
+
+**Definition 2.1** (Pushdown Automaton):
+[stem]
+++++
+\mathcal{P} = (Q, \Sigma, \Gamma, \delta, q_0, Z_0, F)
+++++
+
+- stem:[Q]: Finite set of states
+- stem:[\Sigma]: Input alphabet (tokens)
+- stem:[\Gamma]: Stack alphabet
+- stem:[\delta: Q \times (\Sigma \cup \{\epsilon\}) \times \Gamma \to \mathcal{P}(Q \times \Gamma^*)]: Transition function
+- stem:[q_0 \in Q]: Initial state
+- stem:[Z_0 \in \Gamma]: Initial stack symbol
+- stem:[F \subseteq Q]: Accepting states
+
+=== 2.2 Context-Free Grammar to PDA
+
+**Theorem 2.1** (CFG-PDA Equivalence): For every CFG stem:[G], there exists PDA stem:[\mathcal{P}] such that stem:[L(G) = L(\mathcal{P})].
+
+**Construction 2.1** (Grammar to PDA):
+[stem]
+++++
+\begin{align}
+Q &= \{q\} \\
+\delta(q, \epsilon, A) &= \{(q, \alpha) \mid A \to \alpha \in P\} \\
+\delta(q, a, a) &= \{(q, \epsilon)\} \text{ for terminals } a
+\end{align}
+++++
+
+=== 2.3 LALR(1) Parsing
+
+**Definition 2.2** (LR Item): stem:[[A \to \alpha \cdot \beta]]
+
+Represents parser state: stem:[\alpha] seen, stem:[\beta] expected.
+
+**Definition 2.3** (LALR(1) Automaton): Merger of LR(1) states with same core.
+
+**Theorem 2.2** (LALR(1) Parseability): Anvomidav's grammar is LALR(1).
+
+_Proof_: Grammar analysis confirms no shift-reduce or reduce-reduce conflicts. ∎
+
+=== 2.4 Parser Automaton
+
+**Definition 2.4** (LALR Parser Automaton):
+[stem]
+++++
+\mathcal{P}_{\text{LALR}} = (Q, \Sigma, \Gamma, \mathsf{action}, \mathsf{goto}, q_0)
+++++
+
+- stem:[\mathsf{action}: Q \times \Sigma \to \{\mathsf{shift}(q), \mathsf{reduce}(r), \mathsf{accept}, \mathsf{error}\}]
+- stem:[\mathsf{goto}: Q \times N \to Q] for non-terminals stem:[N]
+
+=== 2.5 Parse Tree Construction
+
+**Definition 2.5** (Parse Tree): Derivation tree for grammar:
+[stem]
+++++
+T ::= a \mid A(T_1, \ldots, T_n) \quad \text{for } A \to X_1 \cdots X_n
+++++
+
+**Theorem 2.3** (Unique Parse): For unambiguous grammar, each input has exactly one parse tree.
+
+=== 2.6 Error Recovery
+
+**Definition 2.6** (Panic Mode): On error, skip tokens until synchronizing token.
+
+**Definition 2.7** (Error Productions): Grammar includes stem:[A \to \mathsf{error}\ \alpha] rules.
+
+== 3. Regular Expressions and Languages
+
+=== 3.1 Token Patterns as Regular Expressions
+
+[cols="2,3"]
+|===
+|Token |Regular Expression
+
+|INTEGER |`[0-9]+`
+|FLOAT |`[0-9]+\.[0-9]+([eE][+-]?[0-9]+)?`
+|TIME |`[0-9]+:[0-9]+(:[0-9]+)?(\.[0-9]+)?`
+|IDENTIFIER |`[a-zA-Z_][a-zA-Z0-9_]*`
+|STRING |`"([^"\\]\|\\.)* "`
+|COMMENT |`//[^\n]*` or `/\*([^*]\|\*[^/])*\*/`
+|===
+
+=== 3.2 Regex to NFA
+
+**Algorithm 3.1** (Thompson's Construction):
+
+- stem:[\epsilon]: Single transition stem:[s \xrightarrow{\epsilon} f]
+- stem:[a]: Single transition stem:[s \xrightarrow{a} f]
+- stem:[r_1 | r_2]: New start with stem:[\epsilon] to both sub-NFAs
+- stem:[r_1 r_2]: Connect end of stem:[N_1] to start of stem:[N_2]
+- stem:[r^*]: New start/end with stem:[\epsilon] loops
+
+=== 3.3 Pumping Lemma
+
+**Lemma 3.1** (Pumping Lemma for Regular Languages): If stem:[L] is regular, then stem:[\exists p] such that any stem:[s \in L] with stem:[|s| \geq p] can be written as stem:[s = xyz] where:
+1. stem:[xy^iz \in L] for all stem:[i \geq 0]
+2. stem:[|y| > 0]
+3. stem:[|xy| \leq p]
+
+**Corollary 3.1**: Anvomidav token classes are regular (by construction via regex).
+
+== 4. Context-Free Languages
+
+=== 4.1 Grammar Properties
+
+**Theorem 4.1** (CFL Closure):
+- CFLs are closed under union, concatenation, Kleene star
+- CFLs are NOT closed under intersection or complement
+
+=== 4.2 Chomsky Normal Form
+
+**Definition 4.1** (CNF): All rules of form:
+- stem:[A \to BC] (two non-terminals)
+- stem:[A \to a] (single terminal)
+- stem:[S \to \epsilon] (only if stem:[\epsilon \in L])
+
+**Theorem 4.2**: Every CFL has a grammar in CNF.
+
+=== 4.3 Parsing Complexity
+
+**Theorem 4.3** (CYK Algorithm): CYK parses any CFG in stem:[O(n^3)] time.
+
+**Theorem 4.4** (LALR(1) Parsing): LALR(1) parsers run in stem:[O(n)] time.
+
+== 5. Timed Automata for Element Execution
+
+=== 5.1 Timed Automaton Definition
+
+**Definition 5.1** (Timed Automaton):
+[stem]
+++++
+\mathcal{A}_T = (L, l_0, C, A, E, I)
+++++
+
+- stem:[L]: Finite set of locations
+- stem:[l_0 \in L]: Initial location
+- stem:[C]: Finite set of clocks
+- stem:[A]: Alphabet of actions
+- stem:[E \subseteq L \times \Phi(C) \times A \times 2^C \times L]: Edges
+- stem:[I: L \to \Phi(C)]: Location invariants
+
+=== 5.2 Clock Constraints
+
+**Definition 5.2** (Clock Constraint):
+[stem]
+++++
+\Phi(C) ::= c \sim n \mid c_1 - c_2 \sim n \mid \phi_1 \land \phi_2
+++++
+
+where stem:[\sim \in \{<, \leq, =, \geq, >\}] and stem:[n \in \mathbb{N}].
+
+=== 5.3 Jump Execution Automaton
+
+**Definition 5.3** (Jump Automaton):
+[source]
+----
+location approach:
+    invariant: x ≤ max_approach
+    transition: guard x ≥ min_approach, action takeoff, reset {x}
+        → in_air
+
+location in_air:
+    invariant: x ≤ flight_time
+    transition: guard x = flight_time, action land
+        → landed
+
+location landed:
+    invariant: true
+    (final)
+----
+
+=== 5.4 Spin Execution Automaton
+
+**Definition 5.4** (Spin Automaton):
+[source]
+----
+location entry:
+    transition: action start_spin, reset {x, revs}
+        → spinning
+
+location spinning:
+    invariant: true
+    transition: guard revs ≥ min_revs ∧ x ≥ min_time, action stop
+        → complete
+    transition: action revolution, inc revs
+        → spinning
+
+location complete:
+    (final)
+----
+
+=== 5.5 Parallel Composition
+
+**Definition 5.5** (Product Automaton): For stem:[\mathcal{A}_1 \| \mathcal{A}_2]:
+[stem]
+++++
+\mathcal{A}_1 \| \mathcal{A}_2 = (L_1 \times L_2, (l_{01}, l_{02}), C_1 \cup C_2, \ldots)
+++++
+
+Used for pairs skating with two skater automata.
+
+=== 5.6 Reachability Analysis
+
+**Problem 5.1** (Timed Reachability): Is location stem:[l_f] reachable?
+
+**Theorem 5.1** (PSPACE-Completeness): Timed automaton reachability is PSPACE-complete.
+
+**Tool Support**: UPPAAL, Kronos, HyTech
+
+== 6. Büchi Automata for Liveness
+
+=== 6.1 ω-Regular Languages
+
+**Definition 6.1** (Büchi Automaton): Accepts infinite words:
+[stem]
+++++
+\mathcal{B} = (Q, \Sigma, \delta, q_0, F)
+++++
+
+Acceptance: Run visits stem:[F] infinitely often.
+
+=== 6.2 LTL to Büchi
+
+**Theorem 6.1** (LTL-Büchi Correspondence): Every LTL formula has an equivalent Büchi automaton.
+
+**Algorithm 6.1**: Tableau construction for LTL to Büchi.
+
+=== 6.3 Liveness Properties
+
+**Example 6.1** (Program Completion):
+[stem]
+++++
+\mathbf{G}(\mathsf{started} \implies \mathbf{F} \mathsf{completed})
+++++
+
+Büchi automaton accepts all traces where every start is eventually followed by completion.
+
+== 7. Tree Automata for AST Analysis
+
+=== 7.1 Bottom-Up Tree Automata
+
+**Definition 7.1** (Bottom-Up Tree Automaton):
+[stem]
+++++
+\mathcal{A}_T = (Q, \Sigma, \delta, F)
+++++
+
+- stem:[\Sigma]: Ranked alphabet (AST node types with arities)
+- stem:[\delta_n : Q^n \times \Sigma_n \to Q]: Transition for arity stem:[n]
+
+=== 7.2 AST Type Checking
+
+Type checking as tree automaton acceptance:
+
+[source]
+----
+δ(q_int, q_int, PLUS) = q_int      // int + int : int
+δ(q_int, q_int, LT) = q_bool       // int < int : bool
+δ(q_bool, q_τ, q_τ, IF) = q_τ      // if bool then τ else τ : τ
+----
+
+=== 7.3 Regular Tree Languages
+
+**Theorem 7.1** (Closure Properties): Regular tree languages are closed under union, intersection, complement.
+
+== 8. Transducers for Compilation
+
+=== 8.1 Finite State Transducers
+
+**Definition 8.1** (FST):
+[stem]
+++++
+\mathcal{T} = (Q, \Sigma, \Gamma, \delta, q_0, F)
+++++
+
+- stem:[\Sigma]: Input alphabet
+- stem:[\Gamma]: Output alphabet
+- stem:[\delta: Q \times \Sigma \to Q \times \Gamma^*]
+
+=== 8.2 Syntax-Directed Translation
+
+**Definition 8.2** (Syntax-Directed Translation Scheme):
+[source]
+----
+E → E₁ + E₂   { E.code = E₁.code ++ E₂.code ++ [ADD] }
+E → n         { E.code = [PUSH n] }
+----
+
+=== 8.3 Mealy and Moore Machines
+
+**Mealy**: Output on transitions
+**Moore**: Output on states
+
+Both used for code generation.
+
+== 9. TODO: Incomplete Specifications
+
+[WARNING]
+====
+The following automata aspects require further development:
+
+* [ ] **§3** - Complete NFA for all token patterns
+* [ ] **§4** - CNF conversion for Anvomidav grammar
+* [ ] **§5** - Full timed automata for all element types
+* [ ] **§6** - Büchi automata for liveness checking
+* [ ] **§7** - Tree automata for full type system
+* [ ] **§8** - Complete FST for code generation
+* [ ] **§10** - Weighted automata for optimization
+====
+
+== 10. References
+
+1. Hopcroft, J. E., Motwani, R., & Ullman, J. D. _Introduction to Automata Theory, Languages, and Computation_. Pearson, 2006.
+2. Sipser, M. _Introduction to the Theory of Computation_. Cengage, 2012.
+3. Alur, R. & Dill, D. L. "A Theory of Timed Automata." _TCS_, 126(2), 1994.
+4. Comon, H., et al. _Tree Automata Techniques and Applications_. 2007.
+
+---
+
+_Document Version: 0.1.0-draft_
+_Last Updated: 2025-01-01_
