@@ -7,6 +7,7 @@ members = [
     "crates/anv-core",
     "crates/anv-syntax",
     "crates/anv-types",
+    "crates/anv-semantics",
     "crates/anv-cli",
 ]
 
@@ -25,6 +26,7 @@ categories = ["compilers", "development-tools"]
 anv-core = { path = "crates/anv-core" }
 anv-syntax = { path = "crates/anv-syntax" }
 anv-types = { path = "crates/anv-types" }
+anv-semantics = { path = "crates/anv-semantics" }
 
 # Parsing
 logos = "0.14"

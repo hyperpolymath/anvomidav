@@ -2,31 +2,282 @@
 // SPDX-FileCopyrightText: 2024-2025 hyperpolymath
 
 = Anvomidav
+:toc: macro
+:toclevels: 3
+:icons: font
+:source-highlighter: rouge
 
-image:https://img.shields.io/badge/license-AGPL--3.0-blue.svg[AGPL-3.0,link="https://www.gnu.org/licenses/agpl-3.0"] image:https://img.shields.io/badge/philosophy-Palimpsest-purple.svg[Palimpsest,link="https://github.com/hyperpolymath/palimpsest-licence"]
+image:https://img.shields.io/badge/license-AGPL--3.0-blue.svg[AGPL-3.0,link="https://www.gnu.org/licenses/agpl-3.0"]
+image:https://img.shields.io/badge/philosophy-Palimpsest-purple.svg[Palimpsest,link="https://github.com/hyperpolymath/palimpsest-licence"]
+image:https://img.shields.io/badge/rust-1.75+-orange.svg[Rust 1.75+]
+image:https://img.shields.io/badge/tests-90%2B_passing-green.svg[Tests]
 
 **The first programming language for choreographers of figure skating.**
 
+toc::[]
+
 == Status
 
-[IMPORTANT]
+[NOTE]
 ====
-This project is in the *concept phase*. The repository contains project infrastructure and governance documents, but no implementation yet. See link:ROADMAP.adoc[ROADMAP.adoc] for planned development.
+**Phase 2 — Core Implementation** (Active Development)
+
+The Rust foundation is complete with a working lexer, parser, type system, and ISU rules validation.
+The CLI tool can check, parse, and create new figure skating programs.
 ====
 
-== Vision
+=== What's Working
 
-Anvomidav aims to provide figure skating choreographers with a domain-specific language (DSL) to:
+[cols="1,3,1"]
+|===
+| Component | Description | Status
 
-* **Notate** — Precisely describe skating elements, transitions, and sequences
-* **Compose** — Build complex programs from reusable choreographic patterns
-* **Validate** — Check technical compliance with ISU (International Skating Union) rules
-* **Visualize** — Generate rink diagrams, timing charts, and 3D previews
-* **Collaborate** — Share and version-control choreographic works
+| **Lexer**
+| Tokenizes Anvomidav source using logos
+| ✓ Complete
 
-== Name
+| **Parser**
+| Builds AST using chumsky 0.9 combinators
+| ✓ Complete
 
-_Anvomidav_ — etymology and meaning to be documented.
+| **Type System**
+| Basic type checking for programs
+| ✓ Complete
+
+| **ISU Rules**
+| Validates programs against ISU regulations
+| ✓ Complete
+
+| **CLI**
+| Command-line interface (`anv`)
+| ✓ Complete
+
+| **All Disciplines**
+| Singles, Pairs, Ice Dance support
+| ✓ Complete
+|===
+
+== Architecture
+
+----
+┌─────────────────────────────────────────────────────────────────┐
+│                         anv-cli                                 │
+│                    (Command Line Interface)                     │
+│         check · parse · lex · fmt · new                         │
+└────────────────────────┬────────────────────────────────────────┘
+                         │
+         ┌───────────────┼───────────────┐
+         │               │               │
+         ▼               ▼               ▼
+┌─────────────┐  ┌─────────────┐  ┌─────────────┐
+│ anv-syntax  │  │ anv-types   │  │anv-semantics│
+│   Lexer     │  │   Type      │  │  ISU Rules  │
+│   Parser    │  │   Checker   │  │  Validation │
+│   AST       │  │             │  │             │
+└──────┬──────┘  └──────┬──────┘  └──────┬──────┘
+       │                │                │
+       └────────────────┼────────────────┘
+                        │
+                        ▼
+               ┌─────────────────┐
+               │    anv-core     │
+               │  Skating Types  │
+               │  Source Spans   │
+               │  Diagnostics    │
+               └─────────────────┘
+----
+
+== Quick Start
+
+=== Building from Source
+
+[source,bash]
+----
+# Clone the repository
+git clone https://github.com/hyperpolymath/anvomidav.git
+cd anvomidav
+
+# Build all crates
+cargo build --release
+
+# Run tests (90+ passing)
+cargo test
+
+# Install the CLI
+cargo install --path crates/anv-cli
+----
+
+=== Creating Your First Program
+
+[source,bash]
+----
+# Create a new singles program
+anv new my_program --template singles
+
+# Check for errors
+anv check my_program/main.anv
+
+# View the AST
+anv parse my_program/main.anv
+----
+
+== Language Syntax
+
+=== Basic Program Structure
+
+[source]
+----
+program competition_2025 {
+    segment sp: short {
+        sequence opening {
+            jump triple axel
+            spin camel L3
+            step circular L4
+        }
+    }
+
+    segment fs: free {
+        sequence jumps {
+            jump quad lutz
+            jump triple flip
+            jump triple loop
+        }
+    }
+}
+----
+
+=== Jump Elements
+
+Anvomidav supports all ISU-recognized jumps with rotation counts:
+
+[source]
+----
+jump single toe_loop    // 1T
+jump double salchow     // 2S
+jump triple axel        // 3A
+jump quad lutz          // 4Lz
+jump triple flip        // 3F
+jump double loop        // 2Lo
+----
+
+=== Spin Elements
+
+Spins include position and level designation:
+
+[source]
+----
+spin upright L2         // USp2
+spin sit L3             // SSp3
+spin camel L4           // CSp4
+spin layback L3         // LSp3
+spin biellmann L4       // BSp4
+----
+
+=== Step Sequences
+
+[source]
+----
+step straight L3        // SlSt3
+step circular L4        // CiSt4
+step serpentine L2      // SeSt2
+----
+
+=== Pairs Elements
+
+For pairs skating, additional elements are available:
+
+[source]
+----
+lift Gr3 L4            // Group 3 lift, Level 4
+lift Gr5 L3            // Group 5 (hand-to-hand) lift
+throw triple axel      // 3ATh
+twist double L3        // 2Tw3
+death_spiral LBI L4    // Left Backward Inside death spiral
+----
+
+=== Ice Dance Elements
+
+[source]
+----
+choreographic spiral   // ChSp
+choreographic spread   // ChSl (spread eagle)
+choreographic ina      // ChSl (Ina Bauer)
+pattern waltz         // Pattern dance
+----
+
+=== Segment Types
+
+[source]
+----
+segment sp: short      // Short Program
+segment fs: free       // Free Skate
+segment rd: rhythm     // Rhythm Dance (Ice Dance)
+segment fd: free       // Free Dance (Ice Dance)
+segment pd: pattern    // Pattern Dance
+segment gala: exhibition  // Exhibition/Gala
+----
+
+== ISU Rules Validation
+
+The semantic analyzer validates programs against ISU Technical Panel guidelines:
+
+=== Singles (Men's/Ladies')
+
+- Short Program: Max 3 jumps, 2 spins, 1 step sequence
+- Free Skate: Max 7 jumps, 3 spins, 1 step sequence
+- No pairs elements allowed (lifts, throws, twists, death spirals)
+
+=== Pairs
+
+- Short Program: 1 required lift, 1 throw, 1 twist, 1 death spiral
+- Free Skate: Multiple lifts, throws permitted
+- Side-by-side and synchronized elements supported
+
+=== Ice Dance
+
+- Only single jumps permitted
+- No throws, twists, or death spirals
+- Pattern dances follow specific step patterns
+- Rhythm and Free Dance segments supported
+
+== CLI Commands
+
+[source,bash]
+----
+anv check <files>       # Check files for errors
+anv parse <file>        # Parse and display AST
+anv lex <file>          # Tokenize and display tokens
+anv fmt <files>         # Format source files (WIP)
+anv new <name>          # Create new project
+    --template singles|pairs|ice-dance
+----
+
+== Crate Documentation
+
+[cols="1,2,1"]
+|===
+| Crate | Description | Lines
+
+| `anv-core`
+| Core skating types (Edge, JumpKind, SpinPosition, Level, etc.)
+| ~500
+
+| `anv-syntax`
+| Lexer (logos) and Parser (chumsky), AST definitions
+| ~1500
+
+| `anv-types`
+| Type checking and inference
+| ~400
+
+| `anv-semantics`
+| ISU rules validation engine
+| ~500
+
+| `anv-cli`
+| Command-line interface
+| ~400
+|===
 
 == Technology Stack
 
@@ -36,42 +287,90 @@ Per the link:.claude/CLAUDE.md[Hyperpolymath Standard]:
 |===
 | Component | Technology
 
-| Compiler/Interpreter
-| OCaml or Rust
+| Language
+| Rust (1.75+)
 
-| Runtime
-| Deno (if JS target) or native
+| Lexer
+| logos 0.14
 
-| Editor Integration
-| LSP server (Rust)
+| Parser
+| chumsky 0.9
 
-| Visualization
-| ReScript + WebGL/Canvas
+| Error Reporting
+| miette 7 (fancy diagnostics)
 
-| Mobile Apps
-| Tauri 2.0+ or Dioxus
+| CLI Framework
+| clap 4
+
+| Serialization
+| serde/serde_json
 |===
 
-== Getting Started
+== Examples
 
-[source,bash]
+=== Men's Short Program
+
+[source]
 ----
-# Clone the repository
-git clone https://github.com/hyperpolymath/anvomidav.git
-cd anvomidav
+program mens_short_2025 {
+    segment sp: short {
+        sequence elements {
+            // Required jump element
+            jump triple axel
 
-# Development environment (once implemented)
-nix develop        # Nix users
-# or
-guix shell         # Guix users
+            // Jump combination
+            jump triple lutz
+            jump triple toe_loop
+
+            // Flying spin
+            spin camel L3
+
+            // Spin with only one change of foot
+            spin sit L3
+
+            // Step sequence
+            step circular L4
+        }
+    }
+}
+----
+
+=== Pairs Free Skate
+
+[source]
+----
+program pairs_free_2025 {
+    segment fs: free {
+        sequence opening {
+            lift Gr5 L4
+            throw triple salchow
+        }
+
+        sequence middle {
+            twist triple L3
+            death_spiral LBO L4
+
+            sync {
+                jump triple toe_loop
+            }
+        }
+
+        sequence closing {
+            spin camel L4
+            step circular L4
+            choreographic spiral
+        }
+    }
+}
 ----
 
 == Documentation
 
 * link:ROADMAP.adoc[Roadmap] — Development phases and milestones
-* link:CONTRIBUTING.md[Contributing] — How to participate
+* link:CONTRIBUTING.adoc[Contributing] — How to participate
 * link:SECURITY.md[Security Policy] — Vulnerability reporting
 * link:CODE_OF_CONDUCT.md[Code of Conduct] — Community standards
+* link:docs/academic/README.adoc[Academic Papers] — Formal specification and proofs
 
 == License
 
@@ -79,6 +378,11 @@ Dual-licensed under link:LICENSE.txt[MIT OR AGPL-3.0-or-later]. Choose the licen
 
 == Contributing
 
-Contributions welcome! This project is in early stages — input on language design, figure skating domain expertise, and implementation help are all valuable.
+Contributions welcome! We're looking for:
 
-See link:CONTRIBUTING.md[CONTRIBUTING.md] for guidelines.
+* **Figure skating domain experts** — Help refine element definitions
+* **Compiler engineers** — Work on optimization and codegen
+* **UI/UX designers** — Design visualization outputs
+* **Documentation writers** — Improve tutorials and guides
+
+See link:CONTRIBUTING.adoc[CONTRIBUTING.adoc] for workflow details.

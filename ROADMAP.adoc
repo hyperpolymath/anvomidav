@@ -2,60 +2,144 @@
 // SPDX-FileCopyrightText: 2024-2025 hyperpolymath
 
 = Anvomidav Roadmap
+:toc: macro
+:toclevels: 3
+:icons: font
 
 This document outlines the development phases for Anvomidav, the first programming language for figure skating choreographers.
 
+toc::[]
+
 == Current Status
 
-[CAUTION]
+[NOTE]
 ====
-**Phase 0 — Project Specification**
+**Phase 2 — Core Implementation** (In Progress)
 
-The repository currently contains governance and infrastructure only. Implementation has not begun.
+The foundation is complete. Lexer, parser, type system, and ISU rules validation are working.
+Next milestone: IR layer and visualization output.
 ====
+
+----
+Phase 0 ████████████████████ 100%  Project Setup
+Phase 1 ████████████████████ 100%  Foundation
+Phase 2 ████████████████░░░░  80%  Core Implementation  ◀── WE ARE HERE
+Phase 3 ░░░░░░░░░░░░░░░░░░░░   0%  Developer Experience
+Phase 4 ░░░░░░░░░░░░░░░░░░░░   0%  Visualization
+Phase 5 ░░░░░░░░░░░░░░░░░░░░   0%  Ecosystem
+----
 
 '''
 
-== Phase 1: Foundation
+== Phase 0: Project Setup ✓ Complete
+
+=== 0.1 Infrastructure
+* [x] Repository structure and governance
+* [x] SPDX license headers (MIT OR AGPL-3.0-or-later)
+* [x] CI/CD configuration
+* [x] Contributing guidelines
+* [x] Security policy
+
+=== 0.2 Development Environment
+* [x] Rust workspace configuration
+* [x] Cargo workspace with 5 crates
+* [x] Development dependencies
+
+'''
+
+== Phase 1: Foundation ✓ Complete
 
 === 1.1 Domain Research
-* [ ] Document figure skating element taxonomy (jumps, spins, steps, lifts)
-* [ ] Map ISU technical panel guidelines to formal rules
-* [ ] Interview choreographers to understand workflow needs
-* [ ] Survey existing notation systems (Benesh, Labanotation adaptations)
+* [x] Document figure skating element taxonomy
+** Jumps: Axel, Lutz, Flip, Loop, Salchow, ToeLoop, Euler
+** Spins: Upright, Sit, Camel, Layback, Biellmann
+** Steps: ThreeTurn, Bracket, Rocker, Counter, Twizzle, etc.
+** Pairs: Lifts (Gr1-5), Throws, Twists, Death Spirals
+** Dance: Choreographic sequences, Pattern dances
+* [x] Map ISU technical panel guidelines to formal rules
+* [x] Define edge system (LFO, LFI, LBO, LBI, RFO, RFI, RBO, RBI)
+* [x] Define level system (B, L1, L2, L3, L4)
 
 === 1.2 Language Design
-* [ ] Define core syntax for element notation
-* [ ] Design timing/music synchronization primitives
-* [ ] Specify spatial positioning system (rink coordinates)
-* [ ] Create grammar specification (EBNF or similar)
-* [ ] Write language reference document
+* [x] Define core syntax for element notation
+* [x] Design program/segment/sequence structure
+* [x] Specify segment types (short, free, rhythm, exhibition, pattern)
+* [x] Support for all disciplines (singles, pairs, ice dance)
+* [x] Write grammar specification
 
 === 1.3 Tooling Bootstrap
-* [ ] Set up build system (Nix flake, Guix manifest)
-* [ ] Configure CI/CD pipelines
-* [ ] Establish test framework
+* [x] Cargo workspace configuration
+* [x] Test framework with 90+ tests
+* [x] Error handling with miette
 
 '''
 
-== Phase 2: Core Implementation
+== Phase 2: Core Implementation (In Progress)
 
-=== 2.1 Parser & AST
-* [ ] Implement lexer
-* [ ] Implement parser
-* [ ] Define AST representation
-* [ ] Add source location tracking for error messages
+=== 2.1 Lexer & Tokenizer ✓ Complete
+* [x] Token definitions using logos 0.14
+* [x] All skating keywords (jumps, spins, steps, etc.)
+* [x] Rotation prefixes (single, double, triple, quad)
+* [x] Level designations (B, L1, L2, L3, L4)
+* [x] Edge identifiers (LFO, RBI, etc.)
+* [x] Lift groups (Gr1-Gr5)
+* [x] Choreographic elements (spiral, spread, ina, hydroblading, pivot)
+* [x] Line/column tracking for error reporting
 
-=== 2.2 Semantic Analysis
-* [ ] Type system for skating elements
-* [ ] Temporal constraint checking
-* [ ] Spatial collision detection (basic)
-* [ ] ISU rule validation
+=== 2.2 Parser & AST ✓ Complete
+* [x] Parser combinators using chumsky 0.9
+* [x] Program and segment parsing
+* [x] Sequence and element parsing
+* [x] Jump element parser (rotation + kind)
+* [x] Spin element parser (position + level)
+* [x] Step sequence parser (pattern + level)
+* [x] Lift parser (group + level)
+* [x] Throw parser (rotation + kind)
+* [x] Twist parser (rotation + level)
+* [x] Death spiral parser (edge + level)
+* [x] Choreographic element parser
+* [x] Pattern element parser
+* [x] Parallel and sync block parsing
+* [x] AST with source spans for all nodes
+* [x] Comprehensive test coverage (40+ parser tests)
 
-=== 2.3 Compiler/Interpreter
-* [ ] Choose target(s): native / JS / WASM
-* [ ] Implement code generation or interpreter
-* [ ] Create runtime library
+=== 2.3 Type System ✓ Complete
+* [x] Type definitions for all elements
+* [x] Type environment
+* [x] Basic type checking
+* [x] Diagnostics with source locations
+
+=== 2.4 Semantic Analysis ✓ Complete
+* [x] ISU rules engine
+* [x] Discipline-specific rules (singles, pairs, ice dance)
+* [x] Element count validation
+** Max jumps per segment
+** Required spins
+** Step sequence requirements
+* [x] Discipline constraints
+** Singles: No pairs elements
+** Ice Dance: Single jumps only, no throws/twists
+** Pairs: Required elements (lifts, throws, etc.)
+* [x] Segment-specific rules
+** Short program limits
+** Free skate limits
+** Pattern dance requirements
+
+=== 2.5 CLI Tool ✓ Complete
+* [x] `anv check` — Validate source files
+* [x] `anv parse` — Show AST (debug/json)
+* [x] `anv lex` — Show tokens
+* [x] `anv fmt` — Format files (stub)
+* [x] `anv new` — Create projects
+** Singles template
+** Pairs template
+** Ice Dance template
+
+=== 2.6 IR Layer (Next)
+* [ ] Intermediate representation design
+* [ ] AST to IR lowering
+* [ ] Optimization passes
+* [ ] Code generation framework
 
 '''
 
@@ -64,20 +148,24 @@ The repository currently contains governance and infrastructure only. Implementa
 === 3.1 Language Server Protocol (LSP)
 * [ ] Syntax highlighting definitions
 * [ ] Autocomplete for elements and transitions
-* [ ] Hover documentation
+* [ ] Hover documentation with ISU codes
 * [ ] Go-to-definition
-* [ ] Diagnostics integration
+* [ ] Real-time diagnostics
 
 === 3.2 Editor Plugins
 * [ ] VS Code / VSCodium extension
 * [ ] Helix configuration
-* [ ] Neovim plugin
+* [ ] Neovim plugin (nvim-lspconfig)
 * [ ] Zed extension
+* [ ] Tree-sitter grammar
 
 === 3.3 Documentation
-* [ ] Language tutorial
+* [ ] Language tutorial (Getting Started)
 * [ ] API reference
-* [ ] Example programs (competition programs, practice sequences)
+* [ ] Example programs
+** Competition programs (Worlds, Olympics)
+** Practice sequences
+** Training drills
 * [ ] Video walkthroughs
 
 '''
@@ -85,18 +173,22 @@ The repository currently contains governance and infrastructure only. Implementa
 == Phase 4: Visualization
 
 === 4.1 2D Rink Diagrams
-* [ ] Static SVG export
+* [ ] SVG export of element paths
 * [ ] Animated trace playback
-* [ ] Pattern overlay
+* [ ] Pattern overlay (compulsory figures)
+* [ ] Ice coverage visualization
+* [ ] Entry/exit edge indicators
 
 === 4.2 Timing Charts
 * [ ] Music waveform alignment
-* [ ] Element duration visualization
+* [ ] Element duration bars
 * [ ] Program component breakdown
+* [ ] Bonus time zones (free skate)
 
 === 4.3 3D Preview (Stretch Goal)
 * [ ] Skeletal animation system
 * [ ] Real-time playback
+* [ ] Camera angles (judges, broadcast)
 * [ ] VR/AR exploration
 
 '''
@@ -106,17 +198,20 @@ The repository currently contains governance and infrastructure only. Implementa
 === 5.1 Package Manager
 * [ ] Choreographic pattern library format
 * [ ] Version resolution
-* [ ] Registry (decentralized preferred)
+* [ ] Decentralized registry (IPFS?)
+* [ ] Pattern sharing and attribution
 
 === 5.2 Collaboration Tools
 * [ ] Diff/merge for choreographic files
 * [ ] Comment/annotation system
 * [ ] Export to PDF/print formats
+* [ ] Coach/skater collaboration mode
 
 === 5.3 Mobile Applications
-* [ ] Rinkside viewer app (Tauri or Dioxus)
+* [ ] Rinkside viewer app (Tauri 2.0)
 * [ ] Offline-first architecture
 * [ ] Music sync for practice
+* [ ] Video overlay mode
 
 '''
 
@@ -125,8 +220,61 @@ The repository currently contains governance and infrastructure only. Implementa
 * Integration with motion capture systems
 * AI-assisted choreography suggestions
 * Competition judging simulation
-* Multi-skater/pairs/ice dance support
-* Synchro skating team coordination
+* Video analysis integration
+* Synchro skating team coordination (16-20 skaters)
+* Base value and GOE calculation
+
+'''
+
+== Technical Debt & Improvements
+
+=== Short Term
+* [ ] Upgrade to chumsky 1.0 when stable
+* [ ] JSON serialization for AST
+* [ ] Source formatter implementation
+* [ ] Better error recovery in parser
+
+=== Medium Term
+* [ ] Incremental parsing for LSP
+* [ ] Parallel validation
+* [ ] Caching layer
+
+=== Long Term
+* [ ] WASM compilation target
+* [ ] Native binaries for all platforms
+
+'''
+
+== Test Coverage
+
+[cols="2,1,1"]
+|===
+| Crate | Tests | Status
+
+| anv-core
+| 16
+| ✓ Passing
+
+| anv-syntax
+| 40
+| ✓ Passing
+
+| anv-types
+| 21
+| ✓ Passing
+
+| anv-semantics
+| 11
+| ✓ Passing
+
+| anv-cli
+| 2
+| ✓ Passing
+
+| **Total**
+| **90+**
+| **✓ All Passing**
+|===
 
 '''
 
@@ -138,4 +286,11 @@ This roadmap is a living document. To propose changes:
 2. Submit a PR for specific task additions
 3. Use issues to claim tasks you want to work on
 
-See link:CONTRIBUTING.md[CONTRIBUTING.md] for workflow details.
+Priority areas seeking contributors:
+
+* **Figure skating expertise** — Validate ISU rules accuracy
+* **Visualization** — SVG/Canvas rendering
+* **LSP development** — Editor integration
+* **Documentation** — Tutorials and examples
+
+See link:CONTRIBUTING.adoc[CONTRIBUTING.adoc] for workflow details.

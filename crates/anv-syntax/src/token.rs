@@ -153,6 +153,12 @@ pub enum Token {
     #[token("pattern")]
     Pattern,
 
+    #[token("rhythm")]
+    Rhythm,
+
+    #[token("exhibition")]
+    Exhibition,
+
     #[token("repeat")]
     Repeat,
 
@@ -259,6 +265,38 @@ pub enum Token {
 
     #[token("L4")]
     Level4,
+
+    // === Lift Groups ===
+    #[token("Gr1")]
+    LiftGroup1,
+
+    #[token("Gr2")]
+    LiftGroup2,
+
+    #[token("Gr3")]
+    LiftGroup3,
+
+    #[token("Gr4")]
+    LiftGroup4,
+
+    #[token("Gr5")]
+    LiftGroup5,
+
+    // === Choreographic Elements ===
+    #[token("spiral")]
+    Spiral,
+
+    #[token("spread")]
+    Spread,
+
+    #[token("ina")]
+    Ina,
+
+    #[token("hydroblading")]
+    Hydroblading,
+
+    #[token("pivot")]
+    Pivot,
 
     // === Operators ===
     #[token("+")]
@@ -442,6 +480,8 @@ impl fmt::Display for Token {
             Token::Short => write!(f, "short"),
             Token::Free => write!(f, "free"),
             Token::Pattern => write!(f, "pattern"),
+            Token::Rhythm => write!(f, "rhythm"),
+            Token::Exhibition => write!(f, "exhibition"),
             Token::Repeat => write!(f, "repeat"),
             Token::Parallel => write!(f, "parallel"),
             Token::Sync => write!(f, "sync"),
@@ -476,6 +516,16 @@ impl fmt::Display for Token {
             Token::Level2 => write!(f, "L2"),
             Token::Level3 => write!(f, "L3"),
             Token::Level4 => write!(f, "L4"),
+            Token::LiftGroup1 => write!(f, "Gr1"),
+            Token::LiftGroup2 => write!(f, "Gr2"),
+            Token::LiftGroup3 => write!(f, "Gr3"),
+            Token::LiftGroup4 => write!(f, "Gr4"),
+            Token::LiftGroup5 => write!(f, "Gr5"),
+            Token::Spiral => write!(f, "spiral"),
+            Token::Spread => write!(f, "spread"),
+            Token::Ina => write!(f, "ina"),
+            Token::Hydroblading => write!(f, "hydroblading"),
+            Token::Pivot => write!(f, "pivot"),
             Token::Plus => write!(f, "+"),
             Token::Minus => write!(f, "-"),
             Token::Star => write!(f, "*"),

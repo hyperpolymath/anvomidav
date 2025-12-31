@@ -8,7 +8,7 @@
 
 use crate::ast::*;
 use crate::token::{Lexer, SpannedToken, Token};
-use anv_core::skating::{JumpKind, Level, Rotations, SpinPosition};
+use anv_core::skating::{Edge, JumpKind, Level, LiftGroup, Rotations, SpinPosition};
 use anv_core::source::{FileId, Span};
 use chumsky::prelude::*;
 use ordered_float::OrderedFloat;
@@ -523,15 +523,128 @@ fn step_sequence_parser(
         .labelled("step sequence")
 }
 
+/// Create lift group parser.
+fn lift_group_parser() -> impl Parser<Token, LiftGroup, Error = Simple<Token>> + Clone {
+    select! {
+        Token::LiftGroup1 => LiftGroup::Group1,
+        Token::LiftGroup2 => LiftGroup::Group2,
+        Token::LiftGroup3 => LiftGroup::Group3,
+        Token::LiftGroup4 => LiftGroup::Group4,
+        Token::LiftGroup5 => LiftGroup::Group5,
+    }
+    .labelled("lift group")
+}
+
+/// Create edge parser.
+fn edge_parser() -> impl Parser<Token, Edge, Error = Simple<Token>> + Clone {
+    select! {
+        Token::LFO => Edge::LFO,
+        Token::LFI => Edge::LFI,
+        Token::LBO => Edge::LBO,
+        Token::LBI => Edge::LBI,
+        Token::RFO => Edge::RFO,
+        Token::RFI => Edge::RFI,
+        Token::RBO => Edge::RBO,
+        Token::RBI => Edge::RBI,
+    }
+    .labelled("edge")
+}
+
+/// Create lift element parser (pairs).
+fn lift_element_parser(
+    _file_id: FileId,
+) -> impl Parser<Token, LiftElement, Error = Simple<Token>> + Clone {
+    just(Token::Lift)
+        .ignore_then(lift_group_parser())
+        .then(level_parser().or_not())
+        .map(|(group, level)| LiftElement {
+            group,
+            level,
+            entry: None,
+            exit: None,
+        })
+        .labelled("lift element")
+}
+
+/// Create throw element parser (pairs).
+fn throw_element_parser(
+    _file_id: FileId,
+) -> impl Parser<Token, ThrowElement, Error = Simple<Token>> + Clone {
+    just(Token::Throw)
+        .ignore_then(rotations_parser())
+        .then(jump_kind_parser())
+        .map(|(rotations, kind)| ThrowElement { kind, rotations })
+        .labelled("throw element")
+}
+
+/// Create twist element parser (pairs).
+fn twist_element_parser(
+    _file_id: FileId,
+) -> impl Parser<Token, TwistElement, Error = Simple<Token>> + Clone {
+    just(Token::Twist)
+        .ignore_then(rotations_parser())
+        .then(level_parser().or_not())
+        .map(|(rotations, level)| TwistElement { rotations, level })
+        .labelled("twist element")
+}
+
+/// Create death spiral element parser (pairs).
+fn death_spiral_parser(
+    _file_id: FileId,
+) -> impl Parser<Token, DeathSpiralElement, Error = Simple<Token>> + Clone {
+    just(Token::DeathSpiral)
+        .ignore_then(edge_parser())
+        .then(level_parser().or_not())
+        .map(|(edge, level)| DeathSpiralElement { edge, level })
+        .labelled("death spiral")
+}
+
+/// Create choreographic kind parser.
+fn choreographic_kind_parser() -> impl Parser<Token, ChoreographicKind, Error = Simple<Token>> + Clone {
+    select! {
+        Token::Spiral => ChoreographicKind::Spiral,
+        Token::Spread => ChoreographicKind::Spread,
+        Token::Ina => ChoreographicKind::Ina,
+        Token::Hydroblading => ChoreographicKind::Hydroblading,
+        Token::Pivot => ChoreographicKind::Pivot,
+    }
+    .labelled("choreographic kind")
+}
+
+/// Create choreographic element parser.
+fn choreographic_element_parser(
+    _file_id: FileId,
+) -> impl Parser<Token, ChoreographicElement, Error = Simple<Token>> + Clone {
+    just(Token::Choreographic)
+        .ignore_then(choreographic_kind_parser())
+        .map(|kind| ChoreographicElement {
+            kind,
+            description: None,
+        })
+        .labelled("choreographic element")
+}
+
 /// Create element parser.
 fn element_parser(
     file_id: FileId,
 ) -> impl Parser<Token, Element, Error = Simple<Token>> + Clone {
+    // Singles elements
     let jump = jump_element_parser(file_id).map(ElementKind::Jump);
     let spin = spin_element_parser(file_id).map(ElementKind::Spin);
     let step = step_sequence_parser(file_id).map(ElementKind::StepSequence);
 
-    let element_kind = choice((jump, spin, step));
+    // Pairs elements
+    let lift = lift_element_parser(file_id).map(ElementKind::Lift);
+    let throw = throw_element_parser(file_id).map(ElementKind::Throw);
+    let twist = twist_element_parser(file_id).map(ElementKind::Twist);
+    let death_spiral = death_spiral_parser(file_id).map(ElementKind::DeathSpiral);
+
+    // Choreographic elements
+    let choreo = choreographic_element_parser(file_id).map(ElementKind::Choreographic);
+
+    let element_kind = choice((
+        jump, spin, step, lift, throw, twist, death_spiral, choreo,
+    ));
 
     element_kind
         .then(timing_parser(file_id).or_not())
@@ -570,6 +683,8 @@ fn segment_parser(
         just(Token::Short).to(SegmentKind::Short),
         just(Token::Free).to(SegmentKind::Free),
         just(Token::Pattern).to(SegmentKind::Pattern),
+        just(Token::Rhythm).to(SegmentKind::Rhythm),
+        just(Token::Exhibition).to(SegmentKind::Exhibition),
     ));
 
     just(Token::Segment)
@@ -924,5 +1039,172 @@ mod tests {
         assert!(result.is_ok());
         let program = result.unwrap();
         assert_eq!(program.segments[0].sequences[0].name.as_ref().unwrap().node, "tech_elements");
+    }
+
+    // === Pairs/Ice Dance Element Tests ===
+
+    #[test]
+    fn test_parse_lift_element() {
+        let source = "program t { segment s: free { sequence { lift Gr3 L4 } } }";
+        let result = parse(source, FileId(0));
+        assert!(result.is_ok());
+        let program = result.unwrap();
+        match &program.segments[0].sequences[0].elements[0].kind {
+            ElementKind::Lift(lift) => {
+                assert_eq!(lift.group, LiftGroup::Group3);
+                assert_eq!(lift.level, Some(Level::L4));
+            }
+            _ => panic!("Expected lift element"),
+        }
+    }
+
+    #[test]
+    fn test_parse_all_lift_groups() {
+        let groups = [("Gr1", LiftGroup::Group1), ("Gr2", LiftGroup::Group2),
+                      ("Gr3", LiftGroup::Group3), ("Gr4", LiftGroup::Group4),
+                      ("Gr5", LiftGroup::Group5)];
+        for (group_str, expected) in groups {
+            let source = format!("program t {{ segment s: free {{ sequence {{ lift {} }} }} }}", group_str);
+            let result = parse(&source, FileId(0));
+            assert!(result.is_ok(), "Failed to parse lift group: {}", group_str);
+            let program = result.unwrap();
+            match &program.segments[0].sequences[0].elements[0].kind {
+                ElementKind::Lift(lift) => assert_eq!(lift.group, expected),
+                _ => panic!("Expected lift element"),
+            }
+        }
+    }
+
+    #[test]
+    fn test_parse_throw_element() {
+        let source = "program t { segment s: free { sequence { throw triple lutz } } }";
+        let result = parse(source, FileId(0));
+        assert!(result.is_ok());
+        let program = result.unwrap();
+        match &program.segments[0].sequences[0].elements[0].kind {
+            ElementKind::Throw(throw) => {
+                assert_eq!(throw.kind, JumpKind::Lutz);
+                assert_eq!(throw.rotations, Rotations::Triple);
+            }
+            _ => panic!("Expected throw element"),
+        }
+    }
+
+    #[test]
+    fn test_parse_twist_element() {
+        let source = "program t { segment s: free { sequence { twist triple L3 } } }";
+        let result = parse(source, FileId(0));
+        assert!(result.is_ok());
+        let program = result.unwrap();
+        match &program.segments[0].sequences[0].elements[0].kind {
+            ElementKind::Twist(twist) => {
+                assert_eq!(twist.rotations, Rotations::Triple);
+                assert_eq!(twist.level, Some(Level::L3));
+            }
+            _ => panic!("Expected twist element"),
+        }
+    }
+
+    #[test]
+    fn test_parse_death_spiral() {
+        let source = "program t { segment s: free { sequence { death_spiral LBI L4 } } }";
+        let result = parse(source, FileId(0));
+        assert!(result.is_ok());
+        let program = result.unwrap();
+        match &program.segments[0].sequences[0].elements[0].kind {
+            ElementKind::DeathSpiral(ds) => {
+                assert_eq!(ds.edge, Edge::LBI);
+                assert_eq!(ds.level, Some(Level::L4));
+            }
+            _ => panic!("Expected death spiral element"),
+        }
+    }
+
+    #[test]
+    fn test_parse_choreographic_element() {
+        let source = "program t { segment s: exhibition { sequence { choreographic spiral } } }";
+        let result = parse(source, FileId(0));
+        assert!(result.is_ok());
+        let program = result.unwrap();
+        match &program.segments[0].sequences[0].elements[0].kind {
+            ElementKind::Choreographic(choreo) => {
+                assert_eq!(choreo.kind, ChoreographicKind::Spiral);
+            }
+            _ => panic!("Expected choreographic element"),
+        }
+    }
+
+    #[test]
+    fn test_parse_all_choreographic_kinds() {
+        let kinds = ["spiral", "spread", "ina", "hydroblading", "pivot"];
+        for kind in kinds {
+            let source = format!("program t {{ segment s: free {{ sequence {{ choreographic {} }} }} }}", kind);
+            let result = parse(&source, FileId(0));
+            assert!(result.is_ok(), "Failed to parse choreographic kind: {}", kind);
+        }
+    }
+
+    // === Segment Kind Tests ===
+
+    #[test]
+    fn test_parse_rhythm_segment() {
+        let source = "program t { segment dance: rhythm { sequence { step circular L3 } } }";
+        let result = parse(source, FileId(0));
+        assert!(result.is_ok());
+        let program = result.unwrap();
+        assert_eq!(program.segments[0].kind, SegmentKind::Rhythm);
+    }
+
+    #[test]
+    fn test_parse_exhibition_segment() {
+        let source = "program t { segment gala: exhibition { sequence { choreographic spiral } } }";
+        let result = parse(source, FileId(0));
+        assert!(result.is_ok());
+        let program = result.unwrap();
+        assert_eq!(program.segments[0].kind, SegmentKind::Exhibition);
+    }
+
+    #[test]
+    fn test_parse_all_segment_kinds_extended() {
+        let kinds = [
+            ("short", SegmentKind::Short),
+            ("free", SegmentKind::Free),
+            ("pattern", SegmentKind::Pattern),
+            ("rhythm", SegmentKind::Rhythm),
+            ("exhibition", SegmentKind::Exhibition),
+        ];
+        for (kind_str, expected_kind) in kinds {
+            let source = format!("program t {{ segment s: {} {{ }} }}", kind_str);
+            let result = parse(&source, FileId(0));
+            assert!(result.is_ok(), "Failed to parse segment kind: {}", kind_str);
+            let program = result.unwrap();
+            assert_eq!(program.segments[0].kind, expected_kind);
+        }
+    }
+
+    #[test]
+    fn test_parse_pairs_program() {
+        let source = r#"
+            program pairs_short {
+                segment short_program: short {
+                    sequence technical {
+                        lift Gr5 L4 at 0:30
+                        throw triple axel at 1:00
+                        twist double L3 at 1:30
+                        death_spiral RBI L4 at 2:00
+                        spin camel sit L3 at 2:30
+                    }
+                }
+            }
+        "#;
+        let result = parse(source, FileId(0));
+        if let Err(ref errors) = result {
+            for e in errors {
+                eprintln!("Parse error: {} at {:?}", e.message, e.span);
+            }
+        }
+        assert!(result.is_ok());
+        let program = result.unwrap();
+        assert_eq!(program.segments[0].sequences[0].elements.len(), 5);
     }
 }

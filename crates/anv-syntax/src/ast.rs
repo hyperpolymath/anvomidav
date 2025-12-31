@@ -189,9 +189,16 @@ pub struct Segment {
 /// Segment kind.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SegmentKind {
+    /// Short program (singles/pairs).
     Short,
+    /// Free skate (singles/pairs).
     Free,
+    /// Pattern dance (ice dance).
     Pattern,
+    /// Rhythm dance (ice dance).
+    Rhythm,
+    /// Exhibition/gala performance.
+    Exhibition,
 }
 
 impl fmt::Display for SegmentKind {
@@ -200,6 +207,8 @@ impl fmt::Display for SegmentKind {
             SegmentKind::Short => write!(f, "short"),
             SegmentKind::Free => write!(f, "free"),
             SegmentKind::Pattern => write!(f, "pattern"),
+            SegmentKind::Rhythm => write!(f, "rhythm"),
+            SegmentKind::Exhibition => write!(f, "exhibition"),
         }
     }
 }
