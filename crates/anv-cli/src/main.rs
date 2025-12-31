@@ -17,9 +17,12 @@ use anv_types::check;
 use anv_viz::{RinkRenderer, SvgOptions, TimelineRenderer};
 use clap::{Parser, Subcommand};
 use miette::{Diagnostic, NamedSource, Report, SourceSpan};
+use notify_debouncer_mini::{new_debouncer, notify::RecursiveMode};
 use std::fs;
 use std::path::PathBuf;
 use std::process::ExitCode;
+use std::sync::mpsc::channel;
+use std::time::Duration;
 
 /// Anvomidav - A domain-specific language for figure skating choreography.
 #[derive(Parser)]
@@ -50,7 +53,8 @@ enum Commands {
 EXAMPLES:
     anv check program.anv
     anv check *.anv --verbose
-    anv check short.anv free.anv")]
+    anv check short.anv free.anv
+    anv check *.anv --watch       (watch for changes)")]
     Check {
         /// Source files to check
         #[arg(required = true)]
@@ -59,6 +63,10 @@ EXAMPLES:
         /// Show detailed output
         #[arg(short, long)]
         verbose: bool,
+
+        /// Watch for file changes and re-check automatically
+        #[arg(short, long)]
+        watch: bool,
     },
 
     /// Parse a source file and print the AST
@@ -92,7 +100,8 @@ EXAMPLES:
 
 EXAMPLES:
     anv fmt program.anv
-    anv fmt *.anv --check     (verify formatting without changes)")]
+    anv fmt *.anv --check     (verify formatting without changes)
+    anv fmt *.anv --watch     (watch for changes)")]
     Fmt {
         /// Source files to format
         files: Vec<PathBuf>,
@@ -100,6 +109,10 @@ EXAMPLES:
         /// Check if files are formatted without modifying them
         #[arg(long)]
         check: bool,
+
+        /// Watch for file changes and re-format automatically
+        #[arg(short, long)]
+        watch: bool,
     },
 
     /// Create a new Anvomidav project
@@ -262,66 +275,214 @@ fn main() -> ExitCode {
     }
 }
 
-fn run(cli: Cli) -> miette::Result<()> {
-    match cli.command {
-        Commands::Check { files, verbose } => {
-            let mut has_errors = false;
+/// Check files for errors, returning true if all passed.
+fn check_files(files: &[PathBuf], verbose: bool) -> bool {
+    let mut has_errors = false;
 
-            for (file_idx, path) in files.iter().enumerate() {
-                if verbose {
-                    eprintln!("Checking {}...", path.display());
+    for (file_idx, path) in files.iter().enumerate() {
+        if verbose {
+            eprintln!("Checking {}...", path.display());
+        }
+
+        let source = match fs::read_to_string(path) {
+            Ok(s) => s,
+            Err(e) => {
+                eprintln!("Failed to read {}: {}", path.display(), e);
+                has_errors = true;
+                continue;
+            }
+        };
+
+        let file_id = FileId(file_idx as u32);
+
+        // Parse
+        let program = match parse(&source, file_id) {
+            Ok(p) => p,
+            Err(errors) => {
+                has_errors = true;
+                for err in errors {
+                    let span: SourceSpan = (err.span.start, err.span.end - err.span.start).into();
+                    let report = Report::new(CliError::ParseError {
+                        src: NamedSource::new(path.display().to_string(), source.clone()),
+                        span,
+                        message: err.message.clone(),
+                        label: err.label.clone().unwrap_or_else(|| "here".into()),
+                        help: err.help.clone(),
+                    });
+                    eprintln!("{:?}", report);
                 }
+                continue;
+            }
+        };
 
-                let source = fs::read_to_string(path).map_err(|e| CliError::ReadError {
-                    path: path.display().to_string(),
-                    source: e,
-                })?;
-
-                let file_id = FileId(file_idx as u32);
-
-                // Parse
-                let program = match parse(&source, file_id) {
-                    Ok(p) => p,
-                    Err(errors) => {
-                        has_errors = true;
-                        for err in errors {
-                            let span: SourceSpan = (err.span.start, err.span.end - err.span.start).into();
-                            let report = Report::new(CliError::ParseError {
-                                src: NamedSource::new(path.display().to_string(), source.clone()),
-                                span,
-                                message: err.message.clone(),
-                                label: err.label.clone().unwrap_or_else(|| "here".into()),
-                                help: err.help.clone(),
-                            });
-                            eprintln!("{:?}", report);
-                        }
-                        continue;
-                    }
-                };
-
-                // Type check
-                if let Err(diagnostics) = check(&program, file_id) {
-                    has_errors = true;
-                    for diag in diagnostics.iter() {
-                        let code_str = diag.code.as_ref().map(|c| c.to_string()).unwrap_or_default();
-                        eprintln!(
-                            "{}:{}: {} [{}]",
-                            path.display(),
-                            diag.labels.first().map(|l| l.span.start).unwrap_or(0),
-                            diag.message,
-                            code_str
-                        );
-                        for note in &diag.notes {
-                            eprintln!("  note: {:?}", note);
-                        }
-                    }
+        // Type check
+        if let Err(diagnostics) = check(&program, file_id) {
+            has_errors = true;
+            for diag in diagnostics.iter() {
+                let code_str = diag.code.as_ref().map(|c| c.to_string()).unwrap_or_default();
+                eprintln!(
+                    "{}:{}: {} [{}]",
+                    path.display(),
+                    diag.labels.first().map(|l| l.span.start).unwrap_or(0),
+                    diag.message,
+                    code_str
+                );
+                for note in &diag.notes {
+                    eprintln!("  note: {:?}", note);
                 }
             }
+        }
+    }
 
-            if has_errors {
-                Err(miette::miette!("check failed with errors"))?;
-            } else if verbose {
-                eprintln!("All checks passed!");
+    if !has_errors && verbose {
+        eprintln!("All checks passed!");
+    }
+
+    !has_errors
+}
+
+/// Format files, returning true if all formatted successfully.
+fn format_files(files: &[PathBuf], check_only: bool) -> bool {
+    if files.is_empty() {
+        eprintln!("No files specified");
+        return true;
+    }
+
+    let mut success = true;
+
+    for path in files {
+        let source = match fs::read_to_string(path) {
+            Ok(s) => s,
+            Err(e) => {
+                eprintln!("Failed to read {}: {}", path.display(), e);
+                success = false;
+                continue;
+            }
+        };
+
+        // Format the source
+        let formatted = match anv_syntax::format::format(&source) {
+            Ok(f) => f,
+            Err(errors) => {
+                for err in errors {
+                    let span: SourceSpan = (err.span.start, err.span.end - err.span.start).into();
+                    let report = Report::new(CliError::ParseError {
+                        src: NamedSource::new(path.display().to_string(), source.clone()),
+                        span,
+                        message: err.message.clone(),
+                        label: err.label.clone().unwrap_or_else(|| "here".into()),
+                        help: err.help.clone(),
+                    });
+                    eprintln!("{:?}", report);
+                }
+                success = false;
+                continue;
+            }
+        };
+
+        let changed = source != formatted;
+
+        if check_only {
+            if changed {
+                eprintln!("{}: would be reformatted", path.display());
+                success = false;
+            } else {
+                eprintln!("{}: ok", path.display());
+            }
+        } else if changed {
+            if let Err(e) = fs::write(path, &formatted) {
+                eprintln!("Failed to write {}: {}", path.display(), e);
+                success = false;
+            } else {
+                eprintln!("{}: formatted", path.display());
+            }
+        } else {
+            eprintln!("{}: unchanged", path.display());
+        }
+    }
+
+    success
+}
+
+/// Watch files for changes and run a callback when they change.
+fn watch_files<F>(files: &[PathBuf], mut on_change: F) -> miette::Result<()>
+where
+    F: FnMut() -> bool,
+{
+    eprintln!("Watching for changes... (press Ctrl+C to stop)");
+
+    // Run once initially
+    on_change();
+
+    // Set up file watcher
+    let (tx, rx) = channel();
+    let mut debouncer = new_debouncer(Duration::from_millis(300), tx)
+        .map_err(|e| miette::miette!("Failed to create watcher: {}", e))?;
+
+    // Watch parent directories of all files
+    let mut watched_dirs = std::collections::HashSet::new();
+    for path in files {
+        if let Some(parent) = path.parent() {
+            let parent = if parent.as_os_str().is_empty() {
+                PathBuf::from(".")
+            } else {
+                parent.to_path_buf()
+            };
+            if watched_dirs.insert(parent.clone()) {
+                debouncer
+                    .watcher()
+                    .watch(&parent, RecursiveMode::NonRecursive)
+                    .map_err(|e| miette::miette!("Failed to watch {}: {}", parent.display(), e))?;
+            }
+        }
+    }
+
+    // Process events
+    loop {
+        match rx.recv() {
+            Ok(Ok(events)) => {
+                // Check if any of our files changed
+                let our_files: std::collections::HashSet<_> = files
+                    .iter()
+                    .filter_map(|p| p.canonicalize().ok())
+                    .collect();
+
+                let changed = events.iter().any(|event| {
+                    event
+                        .path
+                        .canonicalize()
+                        .map(|p| our_files.contains(&p))
+                        .unwrap_or(false)
+                });
+
+                if changed {
+                    eprintln!("\n--- File changed, re-running... ---\n");
+                    on_change();
+                }
+            }
+            Ok(Err(error)) => {
+                eprintln!("Watch error: {}", error);
+            }
+            Err(e) => {
+                eprintln!("Watch channel error: {}", e);
+                break;
+            }
+        }
+    }
+
+    Ok(())
+}
+
+fn run(cli: Cli) -> miette::Result<()> {
+    match cli.command {
+        Commands::Check { files, verbose, watch } => {
+            if watch {
+                watch_files(&files, || check_files(&files, verbose))?;
+            } else {
+                let success = check_files(&files, verbose);
+                if !success {
+                    return Err(miette::miette!("check failed with errors"));
+                }
             }
 
             Ok(())
@@ -384,36 +545,13 @@ fn run(cli: Cli) -> miette::Result<()> {
             Ok(())
         }
 
-        Commands::Fmt { files, check } => {
-            if files.is_empty() {
-                eprintln!("No files specified");
-                return Ok(());
-            }
-
-            for path in &files {
-                let source = fs::read_to_string(path).map_err(|e| CliError::ReadError {
-                    path: path.display().to_string(),
-                    source: e,
-                })?;
-
-                // TODO: Implement formatter
-                // For now, just verify the file parses
-                let _program = parse(&source, FileId(0)).map_err(|errors| {
-                    let err = &errors[0];
-                    let span: SourceSpan = (err.span.start, err.span.end - err.span.start).into();
-                    CliError::ParseError {
-                        src: NamedSource::new(path.display().to_string(), source.clone()),
-                        span,
-                        message: err.message.clone(),
-                        label: err.label.clone().unwrap_or_else(|| "here".into()),
-                        help: err.help.clone(),
-                    }
-                })?;
-
-                if check {
-                    eprintln!("{}: would reformat", path.display());
-                } else {
-                    eprintln!("{}: formatted (no-op, formatter not implemented)", path.display());
+        Commands::Fmt { files, check: check_only, watch } => {
+            if watch {
+                watch_files(&files, || format_files(&files, check_only))?;
+            } else {
+                let success = format_files(&files, check_only);
+                if !success && check_only {
+                    return Err(miette::miette!("Some files would be reformatted"));
                 }
             }
 
