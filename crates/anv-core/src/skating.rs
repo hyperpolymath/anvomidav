@@ -131,7 +131,10 @@ impl Edge {
             Foot::Left => Foot::Right,
             Foot::Right => Foot::Left,
         };
-        Edge::compose(new_foot, dir, curve).unwrap()
+        // SAFETY: decompose only returns Inside/Outside curves, never Flat,
+        // so compose is guaranteed to return Some for the same direction and curve
+        Edge::compose(new_foot, dir, curve)
+            .expect("switch_foot: decompose/compose invariant violated")
     }
 
     /// Parse from string like "LFO", "RBI", etc.
@@ -162,18 +165,13 @@ impl fmt::Display for Edge {
 // =============================================================================
 
 /// Rotation direction for jumps and spins.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default, Serialize, Deserialize)]
 pub enum RotationDirection {
     /// Counter-clockwise (most common for right-handed skaters)
+    #[default]
     CounterClockwise,
     /// Clockwise (most common for left-handed skaters)
     Clockwise,
-}
-
-impl Default for RotationDirection {
-    fn default() -> Self {
-        RotationDirection::CounterClockwise
-    }
 }
 
 // =============================================================================
@@ -181,9 +179,10 @@ impl Default for RotationDirection {
 // =============================================================================
 
 /// ISU level for leveled elements.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default, Serialize, Deserialize)]
 pub enum Level {
     /// Base level (no features)
+    #[default]
     B,
     /// Level 1
     L1,
@@ -227,12 +226,6 @@ impl fmt::Display for Level {
             Level::L3 => write!(f, "3"),
             Level::L4 => write!(f, "4"),
         }
-    }
-}
-
-impl Default for Level {
-    fn default() -> Self {
-        Level::B
     }
 }
 

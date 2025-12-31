@@ -7,7 +7,7 @@
 //! for the Anvomidav DSL.
 
 use crate::ast::*;
-use crate::token::{LexError, Lexer, SpannedToken, Token};
+use crate::token::{Lexer, SpannedToken, Token};
 use anv_core::skating::{JumpKind, Level, Rotations, SpinPosition};
 use anv_core::source::{FileId, Span};
 use chumsky::prelude::*;
@@ -111,6 +111,7 @@ fn ident_parser(
 }
 
 /// Create literal parser.
+#[allow(dead_code)]
 fn literal_parser() -> impl Parser<Token, Literal, Error = Simple<Token>> + Clone {
     select! {
         Token::Integer(n) => Literal::Int(n),
@@ -140,6 +141,7 @@ fn time_expr_parser(
 }
 
 /// Create position expression parser.
+#[allow(dead_code)]
 fn position_expr_parser(
     file_id: FileId,
 ) -> impl Parser<Token, PositionExpr, Error = Simple<Token>> + Clone {
@@ -342,17 +344,18 @@ fn expr_parser(
                 Expr::Let(name, ty, Box::new(value), Box::new(body))
             });
 
-        // Atoms
+        // Atoms - box recursive parsers to prevent stack overflow
         let atom = choice((
             literal,
-            if_expr,
-            let_expr,
-            paren_or_tuple,
-            array,
-            block,
+            if_expr.boxed(),
+            let_expr.boxed(),
+            paren_or_tuple.boxed(),
+            array.boxed(),
+            block.boxed(),
             var,
         ))
-        .map_with_span(move |e, span| spanned(e, span, file_id));
+        .map_with_span(move |e, span| spanned(e, span, file_id))
+        .boxed();
 
         // For now, just use atoms directly (function calls and field access to be added later)
         // TODO: Add function calls and field access parsing
@@ -367,7 +370,8 @@ fn expr_parser(
             .foldr(move |op, expr| {
                 let span = 0..expr.span.end as usize;
                 spanned(Expr::UnaryOp(op, Box::new(expr)), span, file_id)
-            });
+            })
+            .boxed();
 
         // Binary operators (multiplication/division)
         let mul_op = just(Token::Star)
@@ -381,7 +385,8 @@ fn expr_parser(
             .foldl(move |left, (op, right)| {
                 let span = left.span.start as usize..right.span.end as usize;
                 spanned(Expr::BinOp(Box::new(left), op, Box::new(right)), span, file_id)
-            });
+            })
+            .boxed();
 
         // Binary operators (addition/subtraction)
         let add_op = just(Token::Plus)
@@ -394,7 +399,8 @@ fn expr_parser(
             .foldl(move |left, (op, right)| {
                 let span = left.span.start as usize..right.span.end as usize;
                 spanned(Expr::BinOp(Box::new(left), op, Box::new(right)), span, file_id)
-            });
+            })
+            .boxed();
 
         // Comparison operators
         let cmp_op = choice((
@@ -412,7 +418,8 @@ fn expr_parser(
             .foldl(move |left, (op, right)| {
                 let span = left.span.start as usize..right.span.end as usize;
                 spanned(Expr::BinOp(Box::new(left), op, Box::new(right)), span, file_id)
-            });
+            })
+            .boxed();
 
         // Logical AND
         let and = comparison
@@ -421,7 +428,8 @@ fn expr_parser(
             .foldl(move |left, (op, right)| {
                 let span = left.span.start as usize..right.span.end as usize;
                 spanned(Expr::BinOp(Box::new(left), op, Box::new(right)), span, file_id)
-            });
+            })
+            .boxed();
 
         // Logical OR
         and.clone()
@@ -430,6 +438,7 @@ fn expr_parser(
                 let span = left.span.start as usize..right.span.end as usize;
                 spanned(Expr::BinOp(Box::new(left), op, Box::new(right)), span, file_id)
             })
+            .boxed()
     })
 }
 
@@ -460,7 +469,7 @@ fn timing_parser(
 
 /// Create jump element parser.
 fn jump_element_parser(
-    file_id: FileId,
+    _file_id: FileId,
 ) -> impl Parser<Token, JumpElement, Error = Simple<Token>> + Clone {
     just(Token::Jump)
         .ignore_then(rotations_parser())
@@ -477,7 +486,7 @@ fn jump_element_parser(
 
 /// Create spin element parser.
 fn spin_element_parser(
-    file_id: FileId,
+    _file_id: FileId,
 ) -> impl Parser<Token, SpinElement, Error = Simple<Token>> + Clone {
     just(Token::Spin)
         .ignore_then(spin_position_parser().repeated().at_least(1))
@@ -501,7 +510,7 @@ fn spin_element_parser(
 
 /// Create step sequence parser.
 fn step_sequence_parser(
-    file_id: FileId,
+    _file_id: FileId,
 ) -> impl Parser<Token, StepSequence, Error = Simple<Token>> + Clone {
     just(Token::Step)
         .ignore_then(step_pattern_parser())
@@ -772,9 +781,148 @@ mod tests {
     }
 
     #[test]
-    fn test_lexer_error() {
-        let source = "program test { @ }"; // @ is valid now, try invalid char
+    fn test_valid_with_at_symbol() {
+        let source = "program test { @ }"; // @ is a valid token
+        let _result = parse(source, FileId(0));
+        // @ is a valid token, so this may parse or fail depending on grammar
+    }
+
+    #[test]
+    fn test_parse_error_missing_brace() {
+        let source = "program test {";
         let result = parse(source, FileId(0));
-        // This may succeed now with @ being a valid token, that's okay
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_parse_error_missing_program_keyword() {
+        let source = "test {}";
+        let result = parse(source, FileId(0));
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_parse_segment_kinds() {
+        let kinds = [
+            ("short", SegmentKind::Short),
+            ("free", SegmentKind::Free),
+            ("pattern", SegmentKind::Pattern),
+        ];
+        for (kind_str, expected_kind) in kinds {
+            let source = format!("program t {{ segment s: {} {{ }} }}", kind_str);
+            let result = parse(&source, FileId(0));
+            assert!(result.is_ok(), "Failed to parse segment kind: {}", kind_str);
+            let program = result.unwrap();
+            assert_eq!(program.segments[0].kind, expected_kind);
+        }
+    }
+
+    #[test]
+    fn test_parse_multiple_segments() {
+        let source = r#"
+            program competition {
+                segment short_program: short {
+                    sequence opening {
+                        jump triple axel
+                    }
+                }
+                segment free_skate: free {
+                    sequence tech {
+                        jump quad lutz
+                    }
+                }
+            }
+        "#;
+        let result = parse(source, FileId(0));
+        if let Err(ref errors) = result {
+            for e in errors {
+                eprintln!("Parse error: {} at {:?}", e.message, e.span);
+            }
+        }
+        assert!(result.is_ok());
+        let program = result.unwrap();
+        assert_eq!(program.segments.len(), 2);
+        assert_eq!(program.segments[0].name.node, "short_program");
+        assert_eq!(program.segments[1].name.node, "free_skate");
+    }
+
+    #[test]
+    fn test_parse_jump_rotations() {
+        let rotations = [
+            ("single", Rotations::Single),
+            ("double", Rotations::Double),
+            ("triple", Rotations::Triple),
+            ("quad", Rotations::Quad),
+        ];
+        for (rot_str, expected_rot) in rotations {
+            let source = format!("program t {{ segment s: free {{ sequence {{ jump {} loop }} }} }}", rot_str);
+            let result = parse(&source, FileId(0));
+            assert!(result.is_ok(), "Failed to parse rotation: {}", rot_str);
+            let program = result.unwrap();
+            if let ElementKind::Jump(jump) = &program.segments[0].sequences[0].elements[0].kind {
+                assert_eq!(jump.rotations, expected_rot);
+            } else {
+                panic!("Expected jump element");
+            }
+        }
+    }
+
+    #[test]
+    fn test_parse_all_jump_kinds() {
+        let jumps = ["axel", "salchow", "toe_loop", "loop", "flip", "lutz"];
+        for jump_str in jumps {
+            let source = format!("program t {{ segment s: free {{ sequence {{ jump triple {} }} }} }}", jump_str);
+            let result = parse(&source, FileId(0));
+            assert!(result.is_ok(), "Failed to parse jump kind: {}", jump_str);
+        }
+    }
+
+    #[test]
+    fn test_parse_all_spin_positions() {
+        let positions = ["upright", "sit", "camel", "layback"];
+        for pos in positions {
+            let source = format!("program t {{ segment s: free {{ sequence {{ spin {} L2 }} }} }}", pos);
+            let result = parse(&source, FileId(0));
+            assert!(result.is_ok(), "Failed to parse spin position: {}", pos);
+        }
+    }
+
+    #[test]
+    fn test_parse_step_patterns() {
+        let patterns = ["straight", "circular", "serpentine"];
+        for pattern in patterns {
+            let source = format!("program t {{ segment s: free {{ sequence {{ step {} L3 }} }} }}", pattern);
+            let result = parse(&source, FileId(0));
+            assert!(result.is_ok(), "Failed to parse step pattern: {}", pattern);
+        }
+    }
+
+    #[test]
+    fn test_parse_all_levels() {
+        let levels = ["B", "L1", "L2", "L3", "L4"];
+        for level in levels {
+            let source = format!("program t {{ segment s: free {{ sequence {{ spin sit {} }} }} }}", level);
+            let result = parse(&source, FileId(0));
+            assert!(result.is_ok(), "Failed to parse level: {}", level);
+        }
+    }
+
+    #[test]
+    fn test_parse_element_with_time() {
+        let source = "program t { segment s: free { sequence { jump triple axel at 2:30 } } }";
+        let result = parse(source, FileId(0));
+        assert!(result.is_ok());
+        let program = result.unwrap();
+        let element = &program.segments[0].sequences[0].elements[0];
+        assert!(element.timing.is_some());
+    }
+
+    #[test]
+    fn test_parse_named_sequence() {
+        let source = "program t { segment s: free { sequence tech_elements { jump triple axel } } }";
+        let result = parse(source, FileId(0));
+        assert!(result.is_ok());
+        let program = result.unwrap();
+        assert_eq!(program.segments[0].sequences[0].name.as_ref().unwrap().node, "tech_elements");
     }
 }

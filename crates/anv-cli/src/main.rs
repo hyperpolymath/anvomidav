@@ -81,6 +81,7 @@ enum Commands {
 
 /// Error type for CLI operations.
 #[derive(Debug, thiserror::Error, Diagnostic)]
+#[allow(clippy::enum_variant_names)]
 enum CliError {
     #[error("failed to read file: {path}")]
     #[diagnostic(code(anv::io::read_error))]
@@ -103,6 +104,7 @@ enum CliError {
 
     #[error("type error")]
     #[diagnostic(code(anv::types::type_error))]
+    #[allow(dead_code)]
     TypeError {
         #[source_code]
         src: NamedSource<String>,
