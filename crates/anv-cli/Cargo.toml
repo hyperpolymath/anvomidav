@@ -1,0 +1,25 @@
+# SPDX-FileCopyrightText: 2025 hyperpolymath
+# SPDX-License-Identifier: MIT OR AGPL-3.0-or-later
+
+[package]
+name = "anv-cli"
+version = "0.1.0"
+edition = "2021"
+description = "Command-line interface for the Anvomidav figure skating DSL"
+license = "MIT OR AGPL-3.0-or-later"
+repository = "https://github.com/hyperpolymath/anvomidav"
+readme = "README.md"
+keywords = ["figure-skating", "dsl", "cli"]
+categories = ["command-line-utilities", "compilers"]
+
+[[bin]]
+name = "anv"
+path = "src/main.rs"
+
+[dependencies]
+anv-core = { path = "../anv-core" }
+anv-syntax = { path = "../anv-syntax" }
+anv-types = { path = "../anv-types" }
+clap = { workspace = true }
+miette = { workspace = true }
+thiserror = { workspace = true }

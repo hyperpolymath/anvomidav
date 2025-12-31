@@ -1,0 +1,21 @@
+# SPDX-FileCopyrightText: 2025 hyperpolymath
+# SPDX-License-Identifier: MIT OR AGPL-3.0-or-later
+
+[package]
+name = "anv-core"
+description = "Core types and utilities for Anvomidav"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+derive_more = { workspace = true }
+ordered-float = { workspace = true }
+serde = { workspace = true }
+smol_str = { workspace = true }
+thiserror = { workspace = true }
+
+[dev-dependencies]
+pretty_assertions = { workspace = true }

@@ -1,0 +1,63 @@
+# SPDX-FileCopyrightText: 2025 hyperpolymath
+# SPDX-License-Identifier: MIT OR AGPL-3.0-or-later
+
+[workspace]
+resolver = "2"
+members = [
+    "crates/anv-core",
+    "crates/anv-syntax",
+    "crates/anv-types",
+    "crates/anv-cli",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.75"
+authors = ["hyperpolymath"]
+license = "MIT OR AGPL-3.0-or-later"
+repository = "https://github.com/hyperpolymath/anvomidav"
+keywords = ["figure-skating", "choreography", "dsl", "notation"]
+categories = ["compilers", "development-tools"]
+
+[workspace.dependencies]
+# Internal crates
+anv-core = { path = "crates/anv-core" }
+anv-syntax = { path = "crates/anv-syntax" }
+anv-types = { path = "crates/anv-types" }
+
+# Parsing
+logos = "0.14"
+chumsky = "0.9"
+
+# Error handling
+thiserror = "1.0"
+miette = { version = "7", features = ["fancy"] }
+
+# CLI
+clap = { version = "4", features = ["derive"] }
+
+# Data structures
+indexmap = "2"
+rustc-hash = "1.1"
+smol_str = "0.2"
+
+# Serialization
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+# Utilities
+derive_more = "0.99"
+ordered-float = { version = "4", features = ["serde"] }
+
+# Testing
+pretty_assertions = "1"
+insta = { version = "1", features = ["yaml"] }
+
+[profile.release]
+lto = true
+codegen-units = 1
+
+[profile.dev]
+# Faster builds during development
+debug = 1
