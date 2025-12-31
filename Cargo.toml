@@ -11,6 +11,7 @@ members = [
     "crates/anv-ir",
     "crates/anv-viz",
     "crates/anv-cli",
+    "crates/anv-lsp",
 ]
 
 [workspace.package]

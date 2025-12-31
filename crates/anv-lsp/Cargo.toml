@@ -1,0 +1,24 @@
+[package]
+name = "anv-lsp"
+version = "0.1.0"
+edition = "2021"
+description = "Language Server Protocol implementation for Anvomidav"
+license = "MIT OR AGPL-3.0-or-later"
+repository = "https://github.com/hyperpolymath/anvomidav"
+
+[[bin]]
+name = "anv-lsp"
+path = "src/main.rs"
+
+[dependencies]
+anv-core = { path = "../anv-core" }
+anv-syntax = { path = "../anv-syntax" }
+anv-types = { path = "../anv-types" }
+anv-semantics = { path = "../anv-semantics" }
+
+tower-lsp = "0.20"
+tokio = { version = "1", features = ["full"] }
+serde = { workspace = true }
+serde_json = { workspace = true }
+dashmap = "5"
+ropey = "1"
