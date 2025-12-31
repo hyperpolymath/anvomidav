@@ -8,6 +8,7 @@ members = [
     "crates/anv-syntax",
     "crates/anv-types",
     "crates/anv-semantics",
+    "crates/anv-ir",
     "crates/anv-cli",
 ]
 
@@ -27,6 +28,7 @@ anv-core = { path = "crates/anv-core" }
 anv-syntax = { path = "crates/anv-syntax" }
 anv-types = { path = "crates/anv-types" }
 anv-semantics = { path = "crates/anv-semantics" }
+anv-ir = { path = "crates/anv-ir" }
 
 # Parsing
 logos = "0.14"

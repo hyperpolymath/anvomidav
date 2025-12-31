@@ -1,0 +1,23 @@
+# SPDX-License-Identifier: MIT OR AGPL-3.0-or-later
+# SPDX-FileCopyrightText: 2025 hyperpolymath
+
+[package]
+name = "anv-ir"
+version = "0.1.0"
+edition = "2021"
+description = "Intermediate representation for the Anvomidav figure skating DSL"
+license = "MIT OR AGPL-3.0-or-later"
+repository = "https://github.com/hyperpolymath/anvomidav"
+keywords = ["figure-skating", "dsl", "compiler", "ir"]
+categories = ["compilers"]
+
+[dependencies]
+anv-core = { workspace = true }
+anv-syntax = { workspace = true }
+thiserror = { workspace = true }
+ordered-float = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+
+[dev-dependencies]
+pretty_assertions = "1.4"
