@@ -1,0 +1,173 @@
+================================================================================
+Jump element
+================================================================================
+
+program t {
+  segment s: free {
+    sequence {
+      jump triple axel
+    }
+  }
+}
+
+--------------------------------------------------------------------------------
+
+(source_file
+  (program_definition
+    name: (identifier)
+    (segment
+      name: (identifier)
+      kind: (segment_kind)
+      (sequence
+        (element
+          (jump_element
+            (rotation)
+            (jump_kind)))))))
+
+================================================================================
+Spin element with level
+================================================================================
+
+program t {
+  segment s: free {
+    sequence {
+      spin camel sit L4
+    }
+  }
+}
+
+--------------------------------------------------------------------------------
+
+(source_file
+  (program_definition
+    name: (identifier)
+    (segment
+      name: (identifier)
+      kind: (segment_kind)
+      (sequence
+        (element
+          (spin_element
+            (spin_position)
+            (spin_position)
+            (level)))))))
+
+================================================================================
+Step sequence
+================================================================================
+
+program t {
+  segment s: free {
+    sequence {
+      step circular L3
+    }
+  }
+}
+
+--------------------------------------------------------------------------------
+
+(source_file
+  (program_definition
+    name: (identifier)
+    (segment
+      name: (identifier)
+      kind: (segment_kind)
+      (sequence
+        (element
+          (step_element
+            (step_pattern)
+            (level)))))))
+
+================================================================================
+Pairs elements
+================================================================================
+
+program t {
+  segment s: short {
+    sequence {
+      lift Gr5 L4
+      throw triple lutz
+      twist double L3
+      death_spiral LBI L4
+    }
+  }
+}
+
+--------------------------------------------------------------------------------
+
+(source_file
+  (program_definition
+    name: (identifier)
+    (segment
+      name: (identifier)
+      kind: (segment_kind)
+      (sequence
+        (element
+          (lift_element
+            (lift_group)
+            (level)))
+        (element
+          (throw_element
+            (rotation)
+            (jump_kind)))
+        (element
+          (twist_element
+            (rotation)
+            (level)))
+        (element
+          (death_spiral_element
+            (edge)
+            (level)))))))
+
+================================================================================
+Choreographic element
+================================================================================
+
+program t {
+  segment s: exhibition {
+    sequence {
+      choreographic spiral
+    }
+  }
+}
+
+--------------------------------------------------------------------------------
+
+(source_file
+  (program_definition
+    name: (identifier)
+    (segment
+      name: (identifier)
+      kind: (segment_kind)
+      (sequence
+        (element
+          (choreographic_element
+            (choreographic_kind)))))))
+
+================================================================================
+Element with timing
+================================================================================
+
+program t {
+  segment s: free {
+    sequence {
+      jump triple axel at 1:30
+    }
+  }
+}
+
+--------------------------------------------------------------------------------
+
+(source_file
+  (program_definition
+    name: (identifier)
+    (segment
+      name: (identifier)
+      kind: (segment_kind)
+      (sequence
+        (element
+          (jump_element
+            (rotation)
+            (jump_kind))
+          (timing
+            (time_expr
+              (time_literal))))))))

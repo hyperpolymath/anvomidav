@@ -26,7 +26,17 @@ use std::process::ExitCode;
 #[command(name = "anv")]
 #[command(author = "hyperpolymath")]
 #[command(version)]
-#[command(about = "Anvomidav figure skating DSL compiler and tools", long_about = None)]
+#[command(about = "Anvomidav figure skating DSL compiler and tools")]
+#[command(long_about = "Anvomidav is a domain-specific language for describing figure skating \
+programs. It supports singles, pairs, and ice dance disciplines with \
+ISU rule validation.
+
+EXAMPLES:
+    anv check program.anv           Check a program for errors
+    anv viz program.anv             Generate rink visualization
+    anv export program.anv --pretty Export to JSON format
+    anv new my_program --template pairs  Create new pairs project")]
+#[command(after_help = "See 'anv <command> --help' for more information on a specific command.")]
 struct Cli {
     #[command(subcommand)]
     command: Commands,
@@ -35,6 +45,12 @@ struct Cli {
 #[derive(Subcommand)]
 enum Commands {
     /// Check source files for errors without running them
+    #[command(long_about = "Check one or more Anvomidav source files for syntax and type errors.
+
+EXAMPLES:
+    anv check program.anv
+    anv check *.anv --verbose
+    anv check short.anv free.anv")]
     Check {
         /// Source files to check
         #[arg(required = true)]
@@ -46,6 +62,11 @@ enum Commands {
     },
 
     /// Parse a source file and print the AST
+    #[command(long_about = "Parse a source file and display the abstract syntax tree.
+
+EXAMPLES:
+    anv parse program.anv
+    anv parse program.anv --format json > ast.json")]
     Parse {
         /// Source file to parse
         file: PathBuf,
@@ -56,12 +77,22 @@ enum Commands {
     },
 
     /// Lex a source file and print tokens
+    #[command(long_about = "Tokenize a source file and display the token stream.
+Useful for debugging lexer issues.
+
+EXAMPLES:
+    anv lex program.anv")]
     Lex {
         /// Source file to lex
         file: PathBuf,
     },
 
     /// Format source files
+    #[command(long_about = "Format Anvomidav source files to canonical style.
+
+EXAMPLES:
+    anv fmt program.anv
+    anv fmt *.anv --check     (verify formatting without changes)")]
     Fmt {
         /// Source files to format
         files: Vec<PathBuf>,
@@ -72,6 +103,16 @@ enum Commands {
     },
 
     /// Create a new Anvomidav project
+    #[command(long_about = "Create a new Anvomidav project with template files.
+
+TEMPLATES:
+    singles     Singles skating (men's or ladies')
+    pairs       Pairs skating with lifts, throws, etc.
+    ice-dance   Ice dance with patterns and rhythm
+
+EXAMPLES:
+    anv new my_program
+    anv new competition_sp --template pairs")]
     New {
         /// Project name
         name: String,
@@ -82,6 +123,18 @@ enum Commands {
     },
 
     /// Generate SVG visualization of a program
+    #[command(long_about = "Generate SVG visualizations of skating programs.
+
+VISUALIZATION TYPES:
+    rink        Ice rink diagram with element positions
+    timeline    Timeline chart showing element sequence
+    both        Generate both rink and timeline SVGs
+
+EXAMPLES:
+    anv viz program.anv
+    anv viz program.anv -o output.svg
+    anv viz program.anv --viz-type timeline
+    anv viz program.anv --viz-type both --width 1200")]
     Viz {
         /// Source file to visualize
         file: PathBuf,
@@ -104,6 +157,15 @@ enum Commands {
     },
 
     /// Export program to different formats
+    #[command(long_about = "Export skating programs to various formats.
+
+FORMATS:
+    json    Timeline data as JSON (for external tools)
+    ir      Internal representation (for debugging)
+
+EXAMPLES:
+    anv export program.anv
+    anv export program.anv --pretty -o data.json")]
     Export {
         /// Source file to export
         file: PathBuf,
@@ -122,6 +184,21 @@ enum Commands {
     },
 
     /// Display information about a program
+    #[command(long_about = "Display detailed information about a skating program.
+
+Shows element counts, segment details, and optionally validates
+against ISU (International Skating Union) rules.
+
+DISCIPLINES:
+    singles     Men's or Ladies' singles skating
+    ladies      Ladies' singles (alias)
+    pairs       Pairs skating
+    ice-dance   Ice dance
+
+EXAMPLES:
+    anv info program.anv
+    anv info program.anv --validate
+    anv info pairs.anv --validate --discipline pairs")]
     Info {
         /// Source file to analyze
         file: PathBuf,
@@ -148,15 +225,17 @@ enum CliError {
         source: std::io::Error,
     },
 
-    #[error("parse error")]
+    #[error("{message}")]
     #[diagnostic(code(anv::syntax::parse_error))]
     ParseError {
         #[source_code]
         src: NamedSource<String>,
-        #[label("here")]
+        #[label("{label}")]
         span: SourceSpan,
+        message: String,
+        label: String,
         #[help]
-        help: String,
+        help: Option<String>,
     },
 
     #[error("type error")]
@@ -210,7 +289,9 @@ fn run(cli: Cli) -> miette::Result<()> {
                             let report = Report::new(CliError::ParseError {
                                 src: NamedSource::new(path.display().to_string(), source.clone()),
                                 span,
-                                help: err.message.clone(),
+                                message: err.message.clone(),
+                                label: err.label.clone().unwrap_or_else(|| "here".into()),
+                                help: err.help.clone(),
                             });
                             eprintln!("{:?}", report);
                         }
@@ -258,7 +339,9 @@ fn run(cli: Cli) -> miette::Result<()> {
                 CliError::ParseError {
                     src: NamedSource::new(file.display().to_string(), source.clone()),
                     span,
-                    help: err.message.clone(),
+                    message: err.message.clone(),
+                    label: err.label.clone().unwrap_or_else(|| "here".into()),
+                    help: err.help.clone(),
                 }
             })?;
 
@@ -288,7 +371,9 @@ fn run(cli: Cli) -> miette::Result<()> {
                 CliError::ParseError {
                     src: NamedSource::new(file.display().to_string(), source.clone()),
                     span,
-                    help: e.message.clone(),
+                    message: format!("lexer error: {}", e.message),
+                    label: "here".into(),
+                    help: Some("check for invalid characters or unclosed strings".into()),
                 }
             })?;
 
@@ -319,7 +404,9 @@ fn run(cli: Cli) -> miette::Result<()> {
                     CliError::ParseError {
                         src: NamedSource::new(path.display().to_string(), source.clone()),
                         span,
-                        help: err.message.clone(),
+                        message: err.message.clone(),
+                        label: err.label.clone().unwrap_or_else(|| "here".into()),
+                        help: err.help.clone(),
                     }
                 })?;
 
@@ -453,7 +540,9 @@ program {} {{
                 CliError::ParseError {
                     src: NamedSource::new(file.display().to_string(), source.clone()),
                     span,
-                    help: err.message.clone(),
+                    message: err.message.clone(),
+                    label: err.label.clone().unwrap_or_else(|| "here".into()),
+                    help: err.help.clone(),
                 }
             })?;
 
@@ -556,7 +645,9 @@ program {} {{
                 CliError::ParseError {
                     src: NamedSource::new(file.display().to_string(), source.clone()),
                     span,
-                    help: err.message.clone(),
+                    message: err.message.clone(),
+                    label: err.label.clone().unwrap_or_else(|| "here".into()),
+                    help: err.help.clone(),
                 }
             })?;
 
@@ -620,7 +711,9 @@ program {} {{
                 CliError::ParseError {
                     src: NamedSource::new(file.display().to_string(), source.clone()),
                     span,
-                    help: err.message.clone(),
+                    message: err.message.clone(),
+                    label: err.label.clone().unwrap_or_else(|| "here".into()),
+                    help: err.help.clone(),
                 }
             })?;
 

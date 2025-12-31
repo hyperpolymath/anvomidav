@@ -16,24 +16,77 @@ use ordered_float::OrderedFloat;
 /// Parser input type: a stream of spanned tokens.
 pub type TokenStream<'a> = &'a [SpannedToken];
 
-/// Parser error type.
+/// Parser error type with rich context.
 #[derive(Debug, Clone)]
 pub struct ParseError {
+    /// Byte offset range in source.
     pub span: std::ops::Range<usize>,
+    /// Primary error message.
     pub message: String,
+    /// Expected tokens/constructs.
     pub expected: Vec<String>,
+    /// What was actually found.
     pub found: Option<String>,
+    /// Helpful suggestion for fixing the error.
+    pub help: Option<String>,
+    /// Label for the error span.
+    pub label: Option<String>,
+}
+
+impl ParseError {
+    /// Create a new parse error with just a message.
+    pub fn new(span: std::ops::Range<usize>, message: impl Into<String>) -> Self {
+        Self {
+            span,
+            message: message.into(),
+            expected: vec![],
+            found: None,
+            help: None,
+            label: None,
+        }
+    }
+
+    /// Add a help message.
+    pub fn with_help(mut self, help: impl Into<String>) -> Self {
+        self.help = Some(help.into());
+        self
+    }
+
+    /// Add a label for the span.
+    pub fn with_label(mut self, label: impl Into<String>) -> Self {
+        self.label = Some(label.into());
+        self
+    }
+
+    /// Format the expected tokens nicely.
+    fn format_expected(&self) -> String {
+        match self.expected.len() {
+            0 => String::new(),
+            1 => format!("expected {}", self.expected[0]),
+            2 => format!("expected {} or {}", self.expected[0], self.expected[1]),
+            _ => {
+                let (last, rest) = self.expected.split_last().unwrap();
+                format!("expected one of: {}, or {}", rest.join(", "), last)
+            }
+        }
+    }
 }
 
 impl std::fmt::Display for ParseError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.message)?;
-        if !self.expected.is_empty() {
-            write!(f, ", expected one of: {}", self.expected.join(", "))?;
-        }
-        if let Some(ref found) = self.found {
+
+        let expected_str = self.format_expected();
+        if !expected_str.is_empty() {
+            if let Some(ref found) = self.found {
+                write!(f, ": {}, but found {}", expected_str, found)?;
+            } else {
+                write!(f, ": {}", expected_str)?;
+            }
+        } else if let Some(ref found) = self.found {
             write!(f, ", found: {}", found)?;
         }
+
         Ok(())
     }
 }
@@ -56,17 +109,50 @@ pub fn parse(source: &str, file_id: FileId) -> Result<Program, Vec<ParseError>> 
     let tokens = match Lexer::tokenize(source) {
         Ok(tokens) => tokens,
         Err(lex_err) => {
-            return Err(vec![ParseError {
-                span: lex_err.span,
-                message: lex_err.message,
-                expected: vec![],
-                found: None,
-            }])
+            return Err(vec![ParseError::new(lex_err.span, lex_err.message)
+                .with_help("check for invalid characters or unclosed strings")])
         }
     };
 
     // Then parse the token stream
     parse_tokens(&tokens, file_id)
+}
+
+/// Format a token for display in error messages.
+fn format_token(token: &Token) -> String {
+    match token {
+        Token::Program => "\"program\"".into(),
+        Token::Segment => "\"segment\"".into(),
+        Token::Sequence => "\"sequence\"".into(),
+        Token::Jump => "\"jump\"".into(),
+        Token::Spin => "\"spin\"".into(),
+        Token::Step => "\"step\"".into(),
+        Token::LBrace => "\"{\"".into(),
+        Token::RBrace => "\"}\"".into(),
+        Token::Colon => "\":\"".into(),
+        Token::Ident(s) => format!("identifier \"{}\"", s),
+        Token::DocComment(s) => format!("doc comment \"{}\"", s),
+        _ => format!("{}", token),
+    }
+}
+
+/// Generate help text based on what was expected vs found.
+fn generate_help(expected: &[String], found: Option<&Token>) -> Option<String> {
+    if expected.iter().any(|e| e.contains("program")) {
+        return Some("Anvomidav files must start with 'program <name> { ... }'".into());
+    }
+    if expected.iter().any(|e| e.contains("segment")) {
+        return Some("programs contain segments like: segment name: short { ... }".into());
+    }
+    if expected.iter().any(|e| e.contains("sequence")) {
+        return Some("segments contain sequences like: sequence { jump triple axel }".into());
+    }
+    if let Some(Token::Ident(s)) = found {
+        if ["short", "free", "pattern", "rhythm", "exhibition"].contains(&s.as_str()) {
+            return Some(format!("'{}' is a segment kind - use after ':' in segment declaration", s));
+        }
+    }
+    None
 }
 
 /// Parse a token stream into a Program.
@@ -86,14 +172,36 @@ pub fn parse_tokens(tokens: &[SpannedToken], file_id: FileId) -> Result<Program,
         Ok(program) => Ok(program),
         Err(errors) => Err(errors
             .into_iter()
-            .map(|e| ParseError {
-                span: e.span(),
-                message: e.to_string(),
-                expected: e
+            .map(|e| {
+                let expected: Vec<String> = e
                     .expected()
-                    .filter_map(|e| e.as_ref().map(|t| format!("{:?}", t)))
-                    .collect(),
-                found: e.found().map(|t| format!("{:?}", t)),
+                    .filter_map(|e| e.as_ref().map(|t| format_token(t)))
+                    .collect();
+
+                let found_token = e.found();
+                let found = found_token.map(|t| format_token(t));
+                let help = generate_help(&expected, found_token);
+
+                let message = if expected.is_empty() {
+                    if let Some(ref f) = found {
+                        format!("unexpected {}", f)
+                    } else {
+                        "unexpected end of input".into()
+                    }
+                } else if expected.len() == 1 {
+                    format!("expected {}", expected[0])
+                } else {
+                    "syntax error".into()
+                };
+
+                ParseError {
+                    span: e.span(),
+                    message,
+                    expected,
+                    found,
+                    help,
+                    label: Some("here".into()),
+                }
             })
             .collect()),
     }
@@ -766,8 +874,15 @@ fn fn_def_parser(
 fn program_parser(
     file_id: FileId,
 ) -> impl Parser<Token, Program, Error = Simple<Token>> {
-    just(Token::Program)
-        .ignore_then(ident_parser(file_id))
+    // Collect leading doc comments (///)
+    let doc_comments = select! {
+        Token::DocComment(s) => s,
+    }
+    .repeated();
+
+    doc_comments
+        .then_ignore(just(Token::Program))
+        .then(ident_parser(file_id))
         .then_ignore(just(Token::LBrace))
         .then(
             choice((
@@ -779,7 +894,7 @@ fn program_parser(
         )
         .then_ignore(just(Token::RBrace))
         .then_ignore(end())
-        .map(move |(name, items)| {
+        .map(move |((docs, name), items)| {
             let mut imports = vec![];
             let mut functions = vec![];
             let mut segments = vec![];
@@ -794,7 +909,7 @@ fn program_parser(
 
             Program {
                 name,
-                docs: vec![],
+                docs,
                 imports,
                 types: vec![],
                 functions,
@@ -1206,5 +1321,52 @@ mod tests {
         assert!(result.is_ok());
         let program = result.unwrap();
         assert_eq!(program.segments[0].sequences[0].elements.len(), 5);
+    }
+
+    // === Doc Comment Tests ===
+
+    #[test]
+    fn test_parse_doc_comments() {
+        let source = r#"/// This is a program description
+/// It spans multiple lines
+/// And has detail about the skater
+program documented_program {
+    segment sp: short {}
+}
+"#;
+        let result = parse(source, FileId(0));
+        assert!(result.is_ok());
+        let program = result.unwrap();
+        assert_eq!(program.name.node, "documented_program");
+        assert_eq!(program.docs.len(), 3);
+        assert_eq!(program.docs[0], "This is a program description");
+        assert_eq!(program.docs[1], "It spans multiple lines");
+        assert_eq!(program.docs[2], "And has detail about the skater");
+    }
+
+    #[test]
+    fn test_parse_no_doc_comments() {
+        let source = "program no_docs { segment s: free {} }";
+        let result = parse(source, FileId(0));
+        assert!(result.is_ok());
+        let program = result.unwrap();
+        assert!(program.docs.is_empty());
+    }
+
+    #[test]
+    fn test_parse_doc_comments_with_empty_lines() {
+        // Empty doc comment lines should still be captured
+        let source = r#"/// Title
+///
+/// Description after blank line
+program test {}
+"#;
+        let result = parse(source, FileId(0));
+        assert!(result.is_ok());
+        let program = result.unwrap();
+        assert_eq!(program.docs.len(), 3);
+        assert_eq!(program.docs[0], "Title");
+        assert_eq!(program.docs[1], "");
+        assert_eq!(program.docs[2], "Description after blank line");
     }
 }
