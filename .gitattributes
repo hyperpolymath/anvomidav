@@ -18,6 +18,7 @@
 *.scm   text eol=lf
 *.ncl   text eol=lf
 *.nix   text eol=lf
+*.anv   text eol=lf linguist-language=Anvomidav
 
 # Docs
 *.md    text eol=lf diff=markdown
