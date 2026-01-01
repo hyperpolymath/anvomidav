@@ -1,0 +1,12 @@
+// SPDX-License-Identifier: MIT OR AGPL-3.0-or-later
+// Conformance: invalid/err_empty_segment.anv
+// Purpose: Missing segment type specification
+// Expected Error: Parse error - expected segment type after colon
+
+program missing_segment_type {
+    segment sp: {
+        sequence elements {
+            jump triple axel
+        }
+    }
+}

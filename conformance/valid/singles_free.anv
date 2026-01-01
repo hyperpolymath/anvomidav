@@ -1,0 +1,33 @@
+// SPDX-License-Identifier: MIT OR AGPL-3.0-or-later
+// Conformance: valid/singles_free.anv
+// Purpose: Valid singles free skate with multiple sequences
+// Expected: Parses and validates without errors
+
+program singles_free_test {
+    segment fs: free {
+        sequence opening {
+            jump quad lutz
+            jump triple toe_loop
+        }
+
+        sequence spins {
+            spin camel L4
+            spin sit L3
+            spin layback L4
+        }
+
+        sequence jumps_middle {
+            jump triple axel
+            jump triple flip
+            jump triple loop
+        }
+
+        sequence footwork {
+            step circular L4
+        }
+
+        sequence closing {
+            jump double axel
+        }
+    }
+}

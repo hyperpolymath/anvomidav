@@ -1,0 +1,36 @@
+// SPDX-License-Identifier: MIT OR AGPL-3.0-or-later
+// Conformance: valid/pairs_minimal.anv
+// Purpose: Minimal valid pairs program with required elements
+// Expected: Parses and validates without errors
+
+program pairs_test {
+    segment sp: short {
+        sequence jumps {
+            jump triple salchow
+        }
+
+        sequence lift_elem {
+            lift Gr5 L4
+        }
+
+        sequence throw_elem {
+            throw triple flip
+        }
+
+        sequence twist_elem {
+            twist triple L3
+        }
+
+        sequence death_spiral_elem {
+            death_spiral LBI L4
+        }
+
+        sequence spin_elem {
+            spin camel L4
+        }
+
+        sequence step_elem {
+            step circular L3
+        }
+    }
+}

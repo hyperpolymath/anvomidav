@@ -1,0 +1,12 @@
+// SPDX-License-Identifier: MIT OR AGPL-3.0-or-later
+// Conformance: invalid/err_invalid_jump_kind.anv
+// Purpose: Invalid jump type (walley is not a recognized jump)
+// Expected Error: Lexical or parse error - unknown jump kind
+
+program invalid_jump {
+    segment sp: short {
+        sequence elements {
+            jump triple walley
+        }
+    }
+}
