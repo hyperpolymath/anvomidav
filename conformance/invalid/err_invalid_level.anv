@@ -1,0 +1,12 @@
+// SPDX-License-Identifier: MIT OR AGPL-3.0-or-later
+// Conformance: invalid/err_invalid_level.anv
+// Purpose: Invalid level designation (L5 does not exist)
+// Expected Error: Lexical or parse error - unknown level
+
+program invalid_level {
+    segment sp: short {
+        sequence elements {
+            spin camel L5
+        }
+    }
+}

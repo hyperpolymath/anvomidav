@@ -13,8 +13,8 @@
   (project
     (name . "anvomidav")
     (tier . "infrastructure")
-    (license . "AGPL-3.0-or-later")
-    (language . "ada"))
+    (license . "MIT OR AGPL-3.0-or-later")
+    (language . "rust"))
 
   (compliance
     (rsr . #t)

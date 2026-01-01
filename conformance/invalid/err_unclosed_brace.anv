@@ -1,0 +1,9 @@
+// SPDX-License-Identifier: MIT OR AGPL-3.0-or-later
+// Conformance: invalid/err_unclosed_brace.anv
+// Purpose: Unclosed brace - syntax error
+// Expected Error: Parse error - expected '}'
+
+program unclosed {
+    segment sp: short {
+        sequence elements {
+            jump triple axel

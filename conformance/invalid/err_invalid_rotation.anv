@@ -1,0 +1,12 @@
+// SPDX-License-Identifier: MIT OR AGPL-3.0-or-later
+// Conformance: invalid/err_invalid_rotation.anv
+// Purpose: Invalid jump rotation (quintuple does not exist)
+// Expected Error: Lexical or parse error - unknown rotation
+
+program invalid_rotation {
+    segment sp: short {
+        sequence elements {
+            jump quintuple axel
+        }
+    }
+}

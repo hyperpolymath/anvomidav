@@ -1,0 +1,12 @@
+// SPDX-License-Identifier: MIT OR AGPL-3.0-or-later
+// Conformance: invalid/err_pairs_in_singles.anv
+// Purpose: Invalid element - death spiral edge format
+// Expected Error: Parse error - invalid edge specification
+
+program invalid_edge {
+    segment sp: short {
+        sequence elements {
+            death_spiral INVALID L4
+        }
+    }
+}
