@@ -263,21 +263,178 @@ impl TypeChecker {
     }
 
     /// Check a step sequence.
-    fn check_step_sequence(&mut self, _steps: &StepSequence, _span: Span) -> TypeResult<Type> {
-        // TODO: Validate step sequence requirements
+    fn check_step_sequence(&mut self, steps: &StepSequence, span: Span) -> TypeResult<Type> {
+        // Validate step sequence level requirements when steps are explicitly defined
+        // Only check if steps are provided - shorthand notation doesn't require explicit steps
+        if !steps.steps.is_empty() {
+            if let Some(level) = &steps.level {
+                // Higher levels require more difficult steps and variety
+                let required_steps = match level {
+                    anv_core::skating::Level::L4 => 6,
+                    anv_core::skating::Level::L3 => 4,
+                    anv_core::skating::Level::L2 => 2,
+                    _ => 0,
+                };
+                if steps.steps.len() < required_steps {
+                    self.errors.push(TypeError {
+                        message: format!(
+                            "step sequence for level {:?} requires at least {} defined steps, found {}",
+                            level, required_steps, steps.steps.len()
+                        ),
+                        span,
+                        expected: None,
+                        found: None,
+                    });
+                }
+            }
+        }
         Ok(Type::StepSequence)
     }
 
     /// Check a lift element.
-    fn check_lift(&mut self, _lift: &LiftElement, _span: Span) -> TypeResult<Type> {
-        // TODO: Validate lift requirements
+    fn check_lift(&mut self, lift: &LiftElement, span: Span) -> TypeResult<Type> {
+        // Validate lift level is appropriate for the group
+        // Groups 3-5 can achieve higher levels than groups 1-2
+        if let Some(level) = &lift.level {
+            use anv_core::skating::{Level, LiftGroup};
+            let max_level = match lift.group {
+                LiftGroup::Group1 | LiftGroup::Group2 => Level::L3,
+                LiftGroup::Group3 | LiftGroup::Group4 | LiftGroup::Group5 => Level::L4,
+            };
+            if *level > max_level {
+                self.errors.push(TypeError {
+                    message: format!(
+                        "lift group {} cannot achieve level {:?}, maximum is {:?}",
+                        lift.group, level, max_level
+                    ),
+                    span,
+                    expected: None,
+                    found: None,
+                });
+            }
+        }
         Ok(Type::Lift)
     }
 
     /// Check a throw element.
-    fn check_throw(&mut self, _throw: &ThrowElement, _span: Span) -> TypeResult<Type> {
-        // TODO: Validate throw requirements
+    fn check_throw(&mut self, throw: &ThrowElement, span: Span) -> TypeResult<Type> {
+        // Validate throw rotation limits
+        // Axel throws require extra half rotation, so quad axel throw is very rare
+        use anv_core::skating::{JumpKind, Rotations};
+        if throw.kind == JumpKind::Axel && throw.rotations == Rotations::Quad {
+            self.errors.push(TypeError {
+                message: "quad axel throw is not currently recognized in ISU competitions".into(),
+                span,
+                expected: None,
+                found: None,
+            });
+        }
+        // Euler cannot be a throw jump
+        if throw.kind == JumpKind::Euler {
+            self.errors.push(TypeError {
+                message: "euler (half loop) is a connector jump and cannot be used as a throw"
+                    .into(),
+                span,
+                expected: None,
+                found: None,
+            });
+        }
         Ok(Type::Throw)
+    }
+
+    /// Check a pattern and bind variables.
+    fn check_pattern(&mut self, pattern: &Pattern, expected_ty: &Type) -> TypeResult<()> {
+        match pattern {
+            Pattern::Wildcard => Ok(()),
+            Pattern::Var(ident) => {
+                // Bind the variable to the expected type
+                self.env
+                    .define(&ident.node, TypeScheme::mono(expected_ty.clone()));
+                Ok(())
+            }
+            Pattern::Literal(lit) => {
+                // Check that literal type matches expected
+                let lit_ty = match lit {
+                    Literal::Int(_) => Type::Int,
+                    Literal::Float(_) => Type::Float,
+                    Literal::String(_) => Type::String,
+                    Literal::Bool(_) => Type::Bool,
+                };
+                // Unify with expected type (allow type variables to be bound)
+                let dummy_span = Span::new(0, 0, self.file_id);
+                self.unify(&lit_ty, expected_ty, dummy_span)?;
+                Ok(())
+            }
+            Pattern::Tuple(patterns) => {
+                // Expected type should be a tuple with matching arity
+                match expected_ty {
+                    Type::Tuple(types) if types.len() == patterns.len() => {
+                        for (pat, ty) in patterns.iter().zip(types.iter()) {
+                            self.check_pattern(pat, ty)?;
+                        }
+                        Ok(())
+                    }
+                    Type::Var(_) => {
+                        // Unknown type, bind fresh vars for each pattern
+                        for pat in patterns {
+                            self.check_pattern(pat, &Type::Var(TypeVar::fresh()))?;
+                        }
+                        Ok(())
+                    }
+                    _ => {
+                        let dummy_span = Span::new(0, 0, self.file_id);
+                        Err(TypeError {
+                            message: format!(
+                                "expected tuple with {} elements, found {}",
+                                patterns.len(),
+                                expected_ty
+                            ),
+                            span: dummy_span,
+                            expected: Some(Type::Tuple(
+                                patterns.iter().map(|_| Type::Var(TypeVar::fresh())).collect(),
+                            )),
+                            found: Some(expected_ty.clone()),
+                        })
+                    }
+                }
+            }
+            Pattern::Constructor(name, sub_patterns) => {
+                // Constructor patterns bind the sub-patterns
+                for pat in sub_patterns {
+                    self.check_pattern(pat, &Type::Var(TypeVar::fresh()))?;
+                }
+                // Bind constructor name if it's a variable-like pattern
+                self.env
+                    .define(&name.node, TypeScheme::mono(expected_ty.clone()));
+                Ok(())
+            }
+            Pattern::Record(fields) => {
+                // Check field patterns
+                for (name, pat) in fields {
+                    // For record patterns, each field gets a fresh type variable
+                    self.env
+                        .define(&name.node, TypeScheme::mono(Type::Var(TypeVar::fresh())));
+                    self.check_pattern(pat, &Type::Var(TypeVar::fresh()))?;
+                }
+                Ok(())
+            }
+            Pattern::Or(alternatives) => {
+                // All alternatives must bind the same variables with compatible types
+                for alt in alternatives {
+                    self.check_pattern(alt, expected_ty)?;
+                }
+                Ok(())
+            }
+            Pattern::Guard(inner, guard) => {
+                // Check inner pattern
+                self.check_pattern(inner, expected_ty)?;
+                // Check guard expression is boolean
+                let guard_ty = self.infer_spanned_expr(guard)?;
+                let dummy_span = Span::new(0, 0, self.file_id);
+                self.unify(&guard_ty, &Type::Bool, dummy_span)?;
+                Ok(())
+            }
+        }
     }
 
     /// Check timing.
@@ -465,9 +622,47 @@ impl TypeChecker {
                 Ok(Type::Record(field_types))
             }
             Expr::Element(element) => self.check_element(element),
-            Expr::Match(_, _) => {
-                // TODO: Implement match expression type checking
-                Ok(Type::Var(TypeVar::fresh()))
+            Expr::Match(scrutinee, arms) => {
+                // Infer the type of the scrutinee expression
+                let scrutinee_ty = self.infer_spanned_expr(scrutinee)?;
+
+                if arms.is_empty() {
+                    return Err(TypeError {
+                        message: "match expression must have at least one arm".into(),
+                        span: scrutinee.span,
+                        expected: None,
+                        found: None,
+                    });
+                }
+
+                // Check each arm and collect body types
+                let mut result_ty: Option<Type> = None;
+                for arm in arms {
+                    self.env.push_scope();
+
+                    // Check pattern and bind pattern variables
+                    self.check_pattern(&arm.pattern, &scrutinee_ty)?;
+
+                    // Check guard if present
+                    if let Some(ref guard) = arm.guard {
+                        let guard_ty = self.infer_spanned_expr(guard)?;
+                        self.unify(&guard_ty, &Type::Bool, guard.span)?;
+                    }
+
+                    // Infer body type
+                    let body_ty = self.infer_spanned_expr(&arm.body)?;
+
+                    // Unify with previous arm types
+                    if let Some(ref prev_ty) = result_ty {
+                        self.unify(prev_ty, &body_ty, arm.body.span)?;
+                    } else {
+                        result_ty = Some(body_ty);
+                    }
+
+                    self.env.pop_scope();
+                }
+
+                Ok(result_ty.unwrap_or_else(|| Type::Var(TypeVar::fresh())))
             }
         }
     }
@@ -761,9 +956,25 @@ impl TypeChecker {
                     .collect::<Result<_, _>>()?;
                 Ok(Type::App(Box::new(base_type), arg_types))
             }
-            TypeExpr::Refinement { base, var: _, predicate: _ } => {
-                // TODO: Handle refinement types properly with SMT
+            TypeExpr::Refinement { base, var, predicate } => {
+                // Resolve the base type first
                 let base_type = self.resolve_type_expr(base)?;
+
+                // Set up environment with refinement variable bound to the base type
+                self.env.push_scope();
+                self.env
+                    .define(&var.node, TypeScheme::mono(base_type.clone()));
+
+                // Type-check the predicate expression (should be boolean)
+                let pred_ty = self.infer_expr(predicate)?;
+                let dummy_span = Span::new(0, 0, self.file_id);
+                self.unify(&pred_ty, &Type::Bool, dummy_span)?;
+
+                self.env.pop_scope();
+
+                // Return the base type for now
+                // Full SMT-based verification would check that the predicate is satisfiable
+                // and track the refinement constraint for dependent type checking
                 Ok(base_type)
             }
         }

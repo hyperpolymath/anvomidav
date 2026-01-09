@@ -509,8 +509,118 @@ fn run(cli: Cli) -> miette::Result<()> {
             match format.as_str() {
                 "debug" => println!("{:#?}", program),
                 "json" => {
-                    // TODO: Implement JSON serialization
-                    println!("{{\"name\": \"{}\", \"segments\": {}}}", program.name.node, program.segments.len());
+                    // Serialize program to JSON with essential structure
+                    let segments: Vec<serde_json::Value> = program
+                        .segments
+                        .iter()
+                        .map(|seg| {
+                            let sequences: Vec<serde_json::Value> = seg
+                                .sequences
+                                .iter()
+                                .map(|seq| {
+                                    let elements: Vec<serde_json::Value> = seq
+                                        .elements
+                                        .iter()
+                                        .map(|elem| {
+                                            let kind = match &elem.kind {
+                                                anv_syntax::ast::ElementKind::Jump(j) => {
+                                                    serde_json::json!({
+                                                        "type": "jump",
+                                                        "kind": format!("{:?}", j.kind),
+                                                        "rotations": format!("{:?}", j.rotations)
+                                                    })
+                                                }
+                                                anv_syntax::ast::ElementKind::Spin(s) => {
+                                                    serde_json::json!({
+                                                        "type": "spin",
+                                                        "positions": s.positions.iter()
+                                                            .map(|p| format!("{:?}", p.position))
+                                                            .collect::<Vec<_>>(),
+                                                        "level": s.level.map(|l| format!("{}", l))
+                                                    })
+                                                }
+                                                anv_syntax::ast::ElementKind::StepSequence(s) => {
+                                                    serde_json::json!({
+                                                        "type": "step_sequence",
+                                                        "pattern": format!("{}", s.pattern),
+                                                        "level": s.level.map(|l| format!("{}", l))
+                                                    })
+                                                }
+                                                anv_syntax::ast::ElementKind::Lift(l) => {
+                                                    serde_json::json!({
+                                                        "type": "lift",
+                                                        "group": format!("{}", l.group),
+                                                        "level": l.level.map(|l| format!("{}", l))
+                                                    })
+                                                }
+                                                anv_syntax::ast::ElementKind::Throw(t) => {
+                                                    serde_json::json!({
+                                                        "type": "throw",
+                                                        "kind": format!("{:?}", t.kind),
+                                                        "rotations": format!("{:?}", t.rotations)
+                                                    })
+                                                }
+                                                anv_syntax::ast::ElementKind::Twist(t) => {
+                                                    serde_json::json!({
+                                                        "type": "twist",
+                                                        "rotations": format!("{:?}", t.rotations),
+                                                        "level": t.level.map(|l| format!("{}", l))
+                                                    })
+                                                }
+                                                anv_syntax::ast::ElementKind::DeathSpiral(d) => {
+                                                    serde_json::json!({
+                                                        "type": "death_spiral",
+                                                        "edge": format!("{}", d.edge),
+                                                        "level": d.level.map(|l| format!("{}", l))
+                                                    })
+                                                }
+                                                anv_syntax::ast::ElementKind::Choreographic(c) => {
+                                                    serde_json::json!({
+                                                        "type": "choreographic",
+                                                        "kind": format!("{:?}", c.kind)
+                                                    })
+                                                }
+                                                anv_syntax::ast::ElementKind::Pattern(p) => {
+                                                    serde_json::json!({
+                                                        "type": "pattern",
+                                                        "name": p.name.clone()
+                                                    })
+                                                }
+                                                anv_syntax::ast::ElementKind::Transition(_) => {
+                                                    serde_json::json!({"type": "transition"})
+                                                }
+                                                anv_syntax::ast::ElementKind::Parallel(_) => {
+                                                    serde_json::json!({"type": "parallel"})
+                                                }
+                                                anv_syntax::ast::ElementKind::Sync(_) => {
+                                                    serde_json::json!({"type": "sync"})
+                                                }
+                                            };
+                                            kind
+                                        })
+                                        .collect();
+                                    serde_json::json!({
+                                        "name": seq.name.as_ref().map(|n| n.node.clone()),
+                                        "elements": elements
+                                    })
+                                })
+                                .collect();
+                            serde_json::json!({
+                                "name": seg.name.node.clone(),
+                                "kind": format!("{}", seg.kind),
+                                "sequences": sequences
+                            })
+                        })
+                        .collect();
+
+                    let output = serde_json::json!({
+                        "name": program.name.node,
+                        "segments": segments,
+                        "functions": program.functions.len(),
+                        "types": program.types.len(),
+                        "imports": program.imports.len()
+                    });
+                    println!("{}", serde_json::to_string_pretty(&output).unwrap());
                 }
                 _ => {
                     eprintln!("Unknown format: {}. Using 'debug'.", format);

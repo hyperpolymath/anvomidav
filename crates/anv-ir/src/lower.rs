@@ -134,11 +134,26 @@ impl Lowerer {
         let positions: Vec<_> = spin.positions.iter().map(|p| p.position).collect();
         let level = spin.level.unwrap_or_default();
 
+        // Detect flying entry from features
+        let flying = spin.features.iter().any(|f| {
+            matches!(
+                f,
+                anv_syntax::ast::SpinFeature::FlyingEntry | anv_syntax::ast::SpinFeature::JumpEntry
+            )
+        });
+
+        // Detect change of foot from features or from position definitions
+        let change_foot = spin
+            .features
+            .iter()
+            .any(|f| matches!(f, anv_syntax::ast::SpinFeature::ChangeOfFoot))
+            || spin.positions.iter().any(|p| p.change_foot);
+
         let kind = EventKind::Spin {
             positions,
             level,
-            flying: false,     // TODO: detect from features
-            change_foot: false, // TODO: detect from features
+            flying,
+            change_foot,
         };
 
         let mut event = Event::new(id, kind, self.current_time)
