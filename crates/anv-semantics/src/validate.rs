@@ -7,6 +7,7 @@
 //! ISU (International Skating Union) rules.
 
 use crate::rules::{Discipline, ISURules, SegmentRules};
+use anv_core::diagnostics::{Diagnostic, ErrorCode};
 use anv_core::source::Span;
 use anv_syntax::ast::{Element, ElementKind, Program, Segment, SegmentKind};
 use thiserror::Error;
@@ -49,6 +50,98 @@ pub enum SemanticError {
 
     #[error("Invalid element for discipline: {message}")]
     InvalidForDiscipline { message: String, span: Span },
+}
+
+impl SemanticError {
+    /// Get a helpful hint for this error.
+    pub fn hint(&self) -> Option<String> {
+        match self {
+            SemanticError::TooManyElements { element_type, max, .. } => {
+                Some(format!(
+                    "ISU rules limit {} elements to {} in this segment. Consider removing some or moving to a different sequence.",
+                    element_type, max
+                ))
+            }
+            SemanticError::TooFewElements { element_type, min, .. } => {
+                Some(format!(
+                    "ISU rules require at least {} {} elements in this segment. Add more to meet the requirement.",
+                    min, element_type
+                ))
+            }
+            SemanticError::DurationOutOfRange { min, max, .. } => {
+                Some(format!(
+                    "Segment duration must be between {}s and {}s according to ISU rules. Adjust your choreography timing.",
+                    min, max
+                ))
+            }
+            SemanticError::MissingRequiredElement { description, .. } => {
+                Some(format!(
+                    "This element is required by ISU rules: {}. Add it to your program.",
+                    description
+                ))
+            }
+            SemanticError::DuplicateElement { element_type, .. } => {
+                Some(format!(
+                    "ISU rules don't allow duplicate {} elements in the same segment. Remove the duplicate.",
+                    element_type
+                ))
+            }
+            SemanticError::ElementNotAllowed { element_type, .. } => {
+                Some(format!(
+                    "{} is not allowed in this segment type. Check ISU rules for allowed elements.",
+                    element_type
+                ))
+            }
+            SemanticError::InvalidForDiscipline { .. } => {
+                Some("This element doesn't match the discipline rules. For example, pairs elements like lifts are only allowed in pairs skating.".to_string())
+            }
+        }
+    }
+
+    /// Get the span for this error.
+    pub fn span(&self) -> Span {
+        match self {
+            SemanticError::TooManyElements { span, .. } => *span,
+            SemanticError::TooFewElements { span, .. } => *span,
+            SemanticError::DurationOutOfRange { span, .. } => *span,
+            SemanticError::MissingRequiredElement { span, .. } => *span,
+            SemanticError::DuplicateElement { span, .. } => *span,
+            SemanticError::ElementNotAllowed { span, .. } => *span,
+            SemanticError::InvalidForDiscipline { span, .. } => *span,
+        }
+    }
+
+    /// Convert to a Diagnostic with helpful hints.
+    pub fn to_diagnostic(&self) -> Diagnostic {
+        let mut diag = Diagnostic::error(self.to_string())
+            .with_code(self.error_code())
+            .with_label(self.span(), "here");
+
+        if let Some(hint) = self.hint() {
+            diag = diag.with_help(hint);
+        }
+
+        diag
+    }
+
+    /// Get the error code for this error.
+    fn error_code(&self) -> &'static str {
+        match self {
+            SemanticError::TooManyElements { element_type, .. } => {
+                if element_type.contains("jump") {
+                    ErrorCode::TOO_MANY_JUMPS
+                } else {
+                    ErrorCode::INVALID_COMBINATION
+                }
+            }
+            SemanticError::TooFewElements { .. } => ErrorCode::INVALID_COMBINATION,
+            SemanticError::DurationOutOfRange { .. } => ErrorCode::DURATION_EXCEEDED,
+            SemanticError::MissingRequiredElement { .. } => ErrorCode::INVALID_COMBINATION,
+            SemanticError::DuplicateElement { .. } => ErrorCode::INVALID_COMBINATION,
+            SemanticError::ElementNotAllowed { .. } => ErrorCode::INVALID_COMBINATION,
+            SemanticError::InvalidForDiscipline { .. } => ErrorCode::INVALID_COMBINATION,
+        }
+    }
 }
 
 /// Validation result containing warnings and errors.

@@ -1,5 +1,5 @@
 ;; ANCHOR.scope-arrest.2026-01-01.Jewell.scm  (anvomidav)
-;; SPDX-License-Identifier: MIT OR AGPL-3.0-or-later
+;; SPDX-License-Identifier: PMPL-1.0-or-later
 ;; SPDX-FileCopyrightText: 2026 hyperpolymath
 ;;
 ;; This anchor file defines the scope arrest for phase f0.
