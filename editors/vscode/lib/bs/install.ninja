@@ -1,0 +1,14 @@
+rescript = 1
+rule cp
+  command = cp $i $out
+rule touch
+ command = touch $out
+o VSCode.cmi : cp ../bs/src/VSCode.cmi
+o VSCode.cmj : cp ../bs/src/VSCode.cmj
+o VSCode.cmt : cp ../bs/src/VSCode.cmt
+o VSCode.res : cp ../../src/VSCode.res
+o Extension.cmi : cp ../bs/src/Extension.cmi
+o Extension.cmj : cp ../bs/src/Extension.cmj
+o Extension.cmt : cp ../bs/src/Extension.cmt
+o Extension.res : cp ../../src/Extension.res
+build install.stamp : touch VSCode.cmi VSCode.cmj Extension.cmi Extension.cmj 

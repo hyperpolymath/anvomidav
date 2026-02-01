@@ -55,6 +55,26 @@
           "default": "anv-lsp",
           "description": "Path to the Anvomidav language server binary"
         },
+        "anvomidav.enableDiagnostics": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable real-time diagnostics"
+        },
+        "anvomidav.enableCompletion": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable code completion"
+        },
+        "anvomidav.enableHover": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable hover information"
+        },
+        "anvomidav.enableFormatting": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable document formatting"
+        },
         "anvomidav.validation.discipline": {
           "type": "string",
           "enum": [
@@ -80,11 +100,40 @@
     "commands": [
       {
         "command": "anvomidav.restart",
-        "title": "Anvomidav: Restart Language Server"
+        "title": "Restart Language Server",
+        "category": "Anvomidav"
       },
       {
         "command": "anvomidav.showInfo",
-        "title": "Anvomidav: Show Program Info"
+        "title": "Show Program Info",
+        "category": "Anvomidav"
+      },
+      {
+        "command": "anvomidav.validateProgram",
+        "title": "Validate Program",
+        "category": "Anvomidav"
+      },
+      {
+        "command": "anvomidav.formatDocument",
+        "title": "Format Document",
+        "category": "Anvomidav"
+      }
+    ],
+    "menus": {
+      "editor/context": [
+        {
+          "when": "editorLangId == anvomidav",
+          "command": "anvomidav.validateProgram",
+          "group": "anvomidav"
+        }
+      ]
+    },
+    "keybindings": [
+      {
+        "command": "anvomidav.formatDocument",
+        "key": "ctrl+shift+f",
+        "mac": "cmd+shift+f",
+        "when": "editorLangId == anvomidav"
       }
     ]
   },
