@@ -1,0 +1,6 @@
+homepage: "https://github.com/hyperpolymath/anvomidav"
+language: rust
+main_repo: "https://github.com/hyperpolymath/anvomidav"
+sanitizers:
+  - address
+  - undefined
