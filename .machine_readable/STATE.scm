@@ -17,8 +17,8 @@
     (tech-stack ()))
 
   (current-position
-    (phase "initial")
-    (overall-completion 0)
+    (phase "production-ready")
+    (overall-completion 90)
     (components ())
     (working-features ()))
 
