@@ -12,14 +12,15 @@ members = [
     "crates/anv-viz",
     "crates/anv-cli",
     "crates/anv-lsp",
+    "crates/anv-debug",
 ]
 
 [workspace.package]
 version = "1.0.0"
 edition = "2021"
 rust-version = "1.75"
-authors = ["hyperpolymath"]
-license = "MIT OR AGPL-3.0-or-later"
+authors = ["Jonathan D.A. Jewell <jonathan.jewell@open.ac.uk>"]
+license = "PMPL-1.0-or-later"
 repository = "https://github.com/hyperpolymath/anvomidav"
 keywords = ["figure-skating", "choreography", "dsl", "notation"]
 categories = ["compilers", "development-tools"]
@@ -56,6 +57,9 @@ serde_json = "1"
 # Utilities
 derive_more = "0.99"
 ordered-float = { version = "4", features = ["serde"] }
+
+# REPL
+rustyline = "14.0"
 
 # Testing
 pretty_assertions = "1"

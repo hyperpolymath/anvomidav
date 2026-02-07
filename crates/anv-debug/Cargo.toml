@@ -1,0 +1,34 @@
+# SPDX-FileCopyrightText: 2025 Jonathan D.A. Jewell
+# SPDX-License-Identifier: PMPL-1.0-or-later
+
+[package]
+name = "anv-debug"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors = ["Jonathan D.A. Jewell <jonathan.jewell@open.ac.uk>"]
+license = "PMPL-1.0-or-later"
+description = "Interactive debugger for Anvomidav figure skating DSL"
+repository.workspace = true
+
+[[bin]]
+name = "anv-debug"
+path = "src/main.rs"
+
+[dependencies]
+anv-core.workspace = true
+anv-syntax.workspace = true
+anv-types.workspace = true
+anv-semantics.workspace = true
+anv-ir.workspace = true
+
+# Error handling
+miette.workspace = true
+thiserror.workspace = true
+
+# Data structures
+indexmap.workspace = true
+rustc-hash.workspace = true
+
+# CLI
+rustyline = "14.0"
