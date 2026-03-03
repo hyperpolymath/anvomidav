@@ -1,0 +1,5 @@
+# SPDX-License-Identifier: PMPL-1.0-or-later
+# https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
+
+# All files in the repository
+* @hyperpolymath
