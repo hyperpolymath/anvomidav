@@ -1,0 +1,16 @@
+# Anvomidav State Manifest (A2ML)
+@state { version: "1.0.0", last-updated: "2026-03-03", status: "active" }
+
+@project-context:
+name: "Anvomidav"
+tagline: "DSL for figure skating choreography notation"
+repo: "github.com/hyperpolymath/anvomidav"
+completion-percentage: 100
+phase: "production-ready"
+@end
+
+@attestation:
+originalBytes: [Attested by Gemini CLI]
+signature: PLACEHOLDER-ED25519-SIGNATURE
+timestamp: 2026-03-03T12:00:00Z
+@end

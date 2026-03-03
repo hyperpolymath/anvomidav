@@ -95,17 +95,18 @@
   },
   "scripts": {
     "vscode:prepublish": "npm run compile",
-    "compile": "tsc -p ./",
-    "watch": "tsc -watch -p ./",
-    "package": "vsce package",
+    "compile": "deno task compile",
+    "watch": "deno task watch",
+    "package": "deno task package",
     "publish": "vsce publish"
   },
   "devDependencies": {
     "@types/node": "^18.0.0",
     "@types/vscode": "^1.75.0",
     "typescript": "^5.0.0",
-    "vsce": "^2.15.0"
+    "@vscode/vsce": "^3.2.1"
   },
+  "overrides": { "minimatch": "^9.0.0" },
   "dependencies": {
     "vscode-languageclient": "^9.0.0"
   }
