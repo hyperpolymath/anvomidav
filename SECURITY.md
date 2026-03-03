@@ -4,7 +4,7 @@
 ============================================================================
 TEMPLATE INSTRUCTIONS (delete this block before publishing)
 ============================================================================
-Replace all {{PLACEHOLDER}} values with your information:
+Replace all anvomidav values with your information:
   {{PROJECT_NAME}}     - Your project name
   {{OWNER}}            - GitHub username or org (e.g., hyperpolymath)
   {{REPO}}             - Repository name
