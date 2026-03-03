@@ -1,0 +1,7 @@
+{
+  "tasks": {
+    "compile": "deno run -A npm:typescript/bin/tsc -p ./",
+    "watch": "deno run -A npm:typescript/bin/tsc -watch -p ./",
+    "package": "deno run -A npm:@vscode/vsce package"
+  }
+}

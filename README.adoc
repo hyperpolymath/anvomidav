@@ -421,3 +421,8 @@ Contributions welcome! We're looking for:
 * **Documentation writers** — Improve tutorials and guides
 
 See link:CONTRIBUTING.adoc[CONTRIBUTING.adoc] for workflow details.
+
+
+== Architecture
+
+See link:TOPOLOGY.md[TOPOLOGY.md] for a visual architecture map and completion dashboard.

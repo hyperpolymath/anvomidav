@@ -1,0 +1,3 @@
+# SPDX-License-Identifier: PMPL-1.0-or-later
+# asdf version manager configuration
+rust 1.75.0

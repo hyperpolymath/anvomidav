@@ -1,0 +1,113 @@
+{
+  "name": "anvomidav-vscode",
+  "displayName": "Anvomidav",
+  "description": "Language support for Anvomidav figure skating DSL",
+  "version": "1.0.0",
+  "publisher": "hyperpolymath",
+  "engines": {
+    "vscode": "^1.75.0"
+  },
+  "categories": [
+    "Programming Languages"
+  ],
+  "keywords": [
+    "anvomidav",
+    "figure skating",
+    "choreography",
+    "ISU",
+    "notation"
+  ],
+  "license": "PMPL-1.0-or-later",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/hyperpolymath/anvomidav"
+  },
+  "main": "./out/extension.js",
+  "activationEvents": [
+    "onLanguage:anvomidav"
+  ],
+  "contributes": {
+    "languages": [
+      {
+        "id": "anvomidav",
+        "aliases": [
+          "Anvomidav",
+          "anv"
+        ],
+        "extensions": [
+          ".anv",
+          ".anvomidav"
+        ],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "anvomidav",
+        "scopeName": "source.anvomidav",
+        "path": "./syntaxes/anvomidav.tmLanguage.json"
+      }
+    ],
+    "commands": [
+      {
+        "command": "anvomidav.run",
+        "title": "Anvomidav: Run Program"
+      },
+      {
+        "command": "anvomidav.visualize",
+        "title": "Anvomidav: Visualize Choreography"
+      },
+      {
+        "command": "anvomidav.validate",
+        "title": "Anvomidav: Validate ISU Codes"
+      },
+      {
+        "command": "anvomidav.debug",
+        "title": "Anvomidav: Debug Program"
+      }
+    ],
+    "configuration": {
+      "type": "object",
+      "title": "Anvomidav",
+      "properties": {
+        "anvomidav.lspPath": {
+          "type": "string",
+          "default": "anv-lsp",
+          "description": "Path to anv-lsp binary"
+        },
+        "anvomidav.debuggerPath": {
+          "type": "string",
+          "default": "anv-debug",
+          "description": "Path to anv-debug binary"
+        },
+        "anvomidav.enableValidation": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable ISU code validation"
+        },
+        "anvomidav.visualization.autoGenerate": {
+          "type": "boolean",
+          "default": false,
+          "description": "Automatically generate rink visualizations on save"
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "deno task compile",
+    "watch": "deno task watch",
+    "package": "deno task package",
+    "publish": "vsce publish"
+  },
+  "devDependencies": {
+    "@types/node": "^18.0.0",
+    "@types/vscode": "^1.75.0",
+    "typescript": "^5.0.0",
+    "@vscode/vsce": "^3.2.1"
+  },
+  "overrides": { "minimatch": "^9.0.0" },
+  "dependencies": {
+    "vscode-languageclient": "^9.0.0"
+  }
+}
