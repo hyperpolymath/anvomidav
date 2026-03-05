@@ -1,0 +1,8 @@
+{
+  "version": "12.2.0",
+  "bsc_path": "/var/mnt/eclipse/hyper-data/cache/deno/npm/registry.npmjs.org/@rescript/linux-x64/12.2.0/bin/bsc.exe",
+  "bsc_hash": "ca03c46847ff55e2a2115049975f546b655fceff6fc10e34645da2e812314070",
+  "rescript_config_hash": "6c4ea012a6b0e3181a7cbcf2b8b734533e008e133e058a508a3acf44fb095e22",
+  "runtime_path": "/var/mnt/eclipse/hyper-data/cache/deno/npm/registry.npmjs.org/@rescript/runtime/12.2.0",
+  "generated_at": "1772733147121"
+}
