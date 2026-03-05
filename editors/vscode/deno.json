@@ -1,0 +1,15 @@
+{
+  "name": "anvomidav",
+  "version": "0.1.0",
+  "tasks": {
+    "vscode:prepublish": "rescript build",
+    "compile": "rescript build",
+    "watch": "rescript build -w",
+    "clean": "rescript clean"
+  },
+  "imports": {
+    "vscode-languageclient": "npm:vscode-languageclient@^9.0.1",
+    "@rescript/core": "npm:@rescript/core@^1.5.0",
+    "rescript": "^12.0.0"
+  }
+}
