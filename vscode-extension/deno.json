@@ -1,7 +1,15 @@
 {
+  "name": "@hyperpolymath/anvomidav-vscode",
+  "version": "0.1.0",
   "tasks": {
-    "compile": "deno run -A npm:typescript/bin/tsc -p ./",
-    "watch": "deno run -A npm:typescript/bin/tsc -watch -p ./",
+    "build": "deno run -A npm:rescript",
+    "dev": "deno run -A npm:rescript -w",
+    "clean": "deno run -A npm:rescript clean",
     "package": "deno run -A npm:@vscode/vsce package"
+  },
+  "imports": {
+    "rescript": "npm:rescript@^12.0.0",
+    "@rescript/core": "npm:@rescript/core@^1.6.1",
+    "@rescript/runtime/": "npm:/@rescript/runtime@12.2.0/"
   }
 }
