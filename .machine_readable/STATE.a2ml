@@ -1,16 +1,14 @@
-# Anvomidav State Manifest (A2ML)
-@state { version: "1.0.0", last-updated: "2026-03-03", status: "active" }
+# SPDX-License-Identifier: PMPL-1.0-or-later
+# STATE.a2ml — Project state checkpoint
+# Converted from STATE.scm on 2026-03-15
 
-@project-context:
-name: "Anvomidav"
-tagline: "DSL for figure skating choreography notation"
-repo: "github.com/hyperpolymath/anvomidav"
-completion-percentage: 100
-phase: "production-ready"
-@end
+[metadata]
+project = "anvomidav"
+version = "0.1.0"
+last-updated = "2026-03-15"
+status = "active"
 
-@attestation:
-originalBytes: [Attested by Gemini CLI]
-signature: PLACEHOLDER-ED25519-SIGNATURE
-timestamp: 2026-03-03T12:00:00Z
-@end
+[project-context]
+name = "anvomidav"
+completion-percentage = 0
+phase = "In development"

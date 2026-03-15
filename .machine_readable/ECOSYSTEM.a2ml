@@ -1,14 +1,10 @@
-# Anvomidav Ecosystem Manifest (A2ML)
-@ecosystem { version: "0.1.0", last-updated: "2026-03-03" }
+# SPDX-License-Identifier: PMPL-1.0-or-later
+# ECOSYSTEM.a2ml — Ecosystem position
+# Converted from ECOSYSTEM.scm on 2026-03-15
 
-@project:
-name: "anvomidav"
-purpose: "Standardize figure skating notation"
-role: "specialized-dsl"
-@end
+[metadata]
+project = "anvomidav"
+ecosystem = "hyperpolymath"
 
-@attestation:
-originalBytes: [Attested by Gemini CLI]
-signature: PLACEHOLDER-ED25519-SIGNATURE
-timestamp: 2026-03-03T12:00:00Z
-@end
+[position]
+type = "component"
