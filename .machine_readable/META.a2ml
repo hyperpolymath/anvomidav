@@ -1,14 +1,9 @@
-# Anvomidav Meta Manifest (A2ML)
-@meta { version: "0.1.0", last-updated: "2026-03-03" }
+# SPDX-License-Identifier: PMPL-1.0-or-later
+# META.a2ml — Project meta-information
+# Converted from META.scm on 2026-03-15
 
-@project-info:
-type: "dsl"
-languages: ["rust", "julia", "typescript", "deno", "bash"]
-license: "PMPL-1.0-or-later"
-@end
-
-@attestation:
-originalBytes: [Attested by Gemini CLI]
-signature: PLACEHOLDER-ED25519-SIGNATURE
-timestamp: 2026-03-03T12:00:00Z
-@end
+[metadata]
+project = "anvomidav"
+author = "Jonathan D.A. Jewell <j.d.a.jewell@open.ac.uk>"
+license = "PMPL-1.0-or-later"
+standard = "RSR 2026"
