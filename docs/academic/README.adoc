@@ -246,7 +246,7 @@ Academic contributions should:
 
 All academic documentation is dual-licensed under:
 * MIT License
-* AGPL-3.0-or-later
+* PMPL-1.0-or-later
 
 See link:../../LICENSE.txt[LICENSE.txt] for details.
 

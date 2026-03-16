@@ -42,7 +42,7 @@ Phase 5 ░░░░░░░░░░░░░░░░░░░░   0%  Ecosy
 
 === 0.1 Infrastructure
 * [x] Repository structure and governance
-* [x] SPDX license headers (MIT OR AGPL-3.0-or-later)
+* [x] SPDX license headers (MIT OR PMPL-1.0-or-later)
 * [x] CI/CD configuration
 * [x] Contributing guidelines
 * [x] Security policy

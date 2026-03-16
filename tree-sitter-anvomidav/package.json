@@ -7,7 +7,7 @@
     "url": "https://github.com/hyperpolymath/anvomidav.git",
     "directory": "tree-sitter-anvomidav"
   },
-  "license": "MIT OR AGPL-3.0-or-later",
+  "license": "MIT OR PMPL-1.0-or-later",
   "main": "bindings/node",
   "types": "bindings/node",
   "keywords": [

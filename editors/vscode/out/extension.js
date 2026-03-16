@@ -1,6 +1,6 @@
 "use strict";
 // SPDX-FileCopyrightText: 2025 hyperpolymath
-// SPDX-License-Identifier: MIT OR AGPL-3.0-or-later
+// SPDX-License-Identifier: MIT OR PMPL-1.0-or-later
 var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
     if (k2 === undefined) k2 = k;
     var desc = Object.getOwnPropertyDescriptor(m, k);
