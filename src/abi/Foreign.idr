@@ -1,3 +1,4 @@
+-- SPDX-License-Identifier: PMPL-1.0-or-later
 ||| ANVOMIDAV — FFI Bridge Declarations
 |||
 ||| This module defines the formal bridge to the native C/Zig implementation.
