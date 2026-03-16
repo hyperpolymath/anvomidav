@@ -9,6 +9,7 @@
 //! - Running programs
 //! - Generating visualizations
 
+#![forbid(unsafe_code)]
 use anv_core::source::FileId;
 use anv_ir::lower;
 use anv_semantics::{validate_program, Discipline};

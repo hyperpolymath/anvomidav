@@ -25,6 +25,7 @@
 //! let errors = validate_program(&program, Discipline::MenSingles);
 //! ```
 
+#![forbid(unsafe_code)]
 pub mod rules;
 pub mod validate;
 

@@ -50,6 +50,7 @@
 //! let choreography = lower_to_choreo(&timeline);
 //! ```
 
+#![forbid(unsafe_code)]
 pub mod choreo;
 pub mod choreo_lower;
 pub mod lower;

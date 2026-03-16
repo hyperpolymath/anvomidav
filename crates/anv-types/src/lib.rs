@@ -32,6 +32,7 @@
 //! assert!(result.is_ok());
 //! ```
 
+#![forbid(unsafe_code)]
 pub mod check;
 pub mod env;
 pub mod ty;

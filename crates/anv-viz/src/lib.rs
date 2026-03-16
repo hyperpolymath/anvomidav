@@ -19,6 +19,7 @@
 //!     .render(&timeline);
 //! ```
 
+#![forbid(unsafe_code)]
 pub mod rink_svg;
 pub mod timeline_svg;
 

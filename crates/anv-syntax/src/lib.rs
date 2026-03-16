@@ -30,6 +30,7 @@
 //! assert!(result.is_ok());
 //! ```
 
+#![forbid(unsafe_code)]
 pub mod ast;
 pub mod format;
 pub mod parser;

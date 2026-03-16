@@ -7,6 +7,7 @@
 //! Anvomidav compiler and runtime, including skating-specific primitives,
 //! source locations, and diagnostics.
 
+#![forbid(unsafe_code)]
 pub mod diagnostics;
 pub mod skating;
 pub mod source;

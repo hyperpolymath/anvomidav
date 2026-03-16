@@ -6,6 +6,7 @@
 //! Provides REPL-based debugging with breakpoints, variable inspection,
 //! timeline visualization, and ISU code validation.
 
+#![forbid(unsafe_code)]
 use rustyline::error::ReadlineError;
 use rustyline::DefaultEditor;
 use std::collections::HashMap;
