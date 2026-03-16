@@ -1,0 +1,26 @@
+# SPDX-License-Identifier: PMPL-1.0-or-later
+# Clade declaration — part of the gv-clade-index registry
+# See: https://github.com/hyperpolymath/gv-clade-index
+
+[identity]
+uuid = "7c159f0f-c836-5fad-9a40-c9105a75bab5"
+primary-forge = "github"
+primary-owner = "hyperpolymath"
+canonical-name = "anvomidav"
+prefixed-name = "nl-anvomidav"
+
+[clade]
+primary = "nl"
+secondary = []
+assigned = "2026-03-16"
+rationale = "Nextgen language — anvomidav"
+
+[forges]
+github = "hyperpolymath/anvomidav"
+gitlab = "hyperpolymath/anvomidav"
+bitbucket = "hyperpolymath/anvomidav"
+
+[lineage]
+type = "monorepo-child"
+parent = "nextgen-languages"
+born = "2026-03-16"
