@@ -4,7 +4,7 @@ name = "Anvomidav"
 description = "Language support for Anvomidav figure skating choreography DSL"
 version = "0.1.0"
 schema_version = 1
-authors = ["hyperpolymath"]
+authors = ["Jonathan D.A. Jewell <j.d.a.jewell@open.ac.uk>"]
 repository = "https://github.com/hyperpolymath/anvomidav"
 
 [languages.anvomidav]
