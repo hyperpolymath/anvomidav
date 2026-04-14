@@ -1,0 +1,17 @@
+# STATE.a2ml — Anvomidav
+project = "anvomidav"
+version = "0.1.0"
+last-updated = "2026-04-13"
+
+[status]
+phase = "concept"
+grade = "C"
+readiness = "C" # 6/10 (Concept Phase)
+
+[features]
+dsl = "Choreography DSL for figure skating"
+formal-verification = "In-progress (spec-only)"
+
+[audit]
+last-pass = "2026-04-13"
+passed = true
