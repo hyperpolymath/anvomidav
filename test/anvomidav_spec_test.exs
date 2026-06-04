@@ -1,6 +1,5 @@
-# SPDX-License-Identifier: MIT OR MPL-2.0
-# Copyright (c) 2026 Jonathan D.A. Jewell (hyperpolymath)
-
+# SPDX-License-Identifier: MPL-2.0
+# Copyright (c) Jonathan D.A. Jewell <j.d.a.jewell@open.ac.uk>
 # Anvomidav — Figure Skating Choreography DSL
 #
 # Placeholder test module for the Anvomidav language.
