@@ -2,7 +2,6 @@
 # RSR-compliant CodeQL workflow with SHA-pinned actions
 
 name: "CodeQL"
-
 on:
   push:
     branches: ["main"]
@@ -10,7 +9,6 @@ on:
     branches: ["main"]
   schedule:
     - cron: '42 20 * * 0'
-
 # Estate guardrail: cancel superseded runs so re-pushes / rebased PR
 # updates do not pile up queued runs against the shared account-wide
 # Actions concurrency pool. Applied only to read-only check workflows
@@ -18,10 +16,7 @@ on:
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
-
-
 permissions: read-all
-
 jobs:
   analyze:
     name: Analyze (${{ matrix.language }})
@@ -32,7 +27,6 @@ jobs:
       packages: read
       actions: read
       contents: read
-
     strategy:
       fail-fast: false
       matrix:
@@ -46,19 +40,16 @@ jobs:
           #   build-mode: autobuild
           - language: javascript-typescript
             build-mode: none
-          # - language: python
-          #   build-mode: none
-
+        # - language: python
+        #   build-mode: none
     steps:
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-
       - name: Initialize CodeQL
         uses: github/codeql-action/init@ea9e4e37992a54ee68a9571571f9a567d8f90f78 # v3.28.0
         with:
           languages: ${{ matrix.language }}
           build-mode: ${{ matrix.build-mode }}
-
       - name: Build (manual mode)
         if: matrix.build-mode == 'manual'
         shell: bash
@@ -67,7 +58,6 @@ jobs:
           # cargo build --release
           # mix compile
           exit 1
-
       - name: Perform CodeQL Analysis
         uses: github/codeql-action/analyze@ea9e4e37992a54ee68a9571571f9a567d8f90f78 # v3.28.0
         with:
