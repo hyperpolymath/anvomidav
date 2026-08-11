@@ -1,4 +1,4 @@
-<!-- SPDX-License-Identifier: MIT OR MPL-2.0 -->
+<!-- SPDX-License-Identifier: CC-BY-SA-4.0 OR MPL-2.0 -->
 <!-- Copyright (c) 2024-2025 hyperpolymath -->
 
 # TOPOLOGY.md — Anvomidav
