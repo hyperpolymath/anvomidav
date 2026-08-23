@@ -46,7 +46,7 @@ Per the [Hyperpolymath Standard](.claude/CLAUDE.md):
 | Compiler/Interpreter | OCaml or Rust                 |
 | Runtime              | Deno (if JS target) or native |
 | Editor Integration   | LSP server (Rust)             |
-| Visualization        | ReScript + WebGL/Canvas       |
+| Visualization        | AffineScript + WebGL/Canvas       |
 | Mobile Apps          | Tauri 2.0+ or Dioxus          |
 
 # Getting Started
@@ -57,7 +57,7 @@ git clone https://github.com/hyperpolymath/anvomidav.git
 cd anvomidav
 
 # Development environment (once implemented)
-nix develop        # Nix users
+guix develop        # Guix users
 # or
 guix shell         # Guix users
 ```
