@@ -32,7 +32,7 @@ The repository currently contains governance and infrastructure only. Implementa
 * [ ] Write language reference document
 
 === 1.3 Tooling Bootstrap
-* [ ] Set up build system (Nix flake, Guix manifest)
+* [ ] Set up build system (Guix flake, Guix manifest)
 * [ ] Configure CI/CD pipelines
 * [ ] Establish test framework
 

@@ -31,7 +31,7 @@
 | Bun | Deno |
 | pnpm/yarn | Deno |
 | Go | Rust |
-| Python (general) | ReScript/Rust |
+| Python (general) | AffineScript/Rust |
 | Java/Kotlin | Rust/Tauri/Dioxus |
 | Swift | Tauri/Dioxus |
 | React Native | Tauri/Dioxus |
@@ -58,7 +58,7 @@ Both are FOSS with independent governance (no Big Tech).
 ### Package Management
 
 - **Primary**: Guix (guix.scm)
-- **Fallback**: Nix (flake.nix)
+- **Fallback**: Guix (flake.guix)
 - **JS deps**: Deno (deno.json imports)
 
 ### Security Requirements

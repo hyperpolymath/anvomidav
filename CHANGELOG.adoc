@@ -1,0 +1,46 @@
+== Changelog
+
+All notable changes to `+anvomidav+` will be documented in this file.
+
+This file is generated from conventional commits by the
+https://github.com/hyperpolymath/standards/blob/main/.github/workflows/changelog-reusable.yml[`+changelog-reusable.yml+`]
+workflow (`+hyperpolymath/standards#206+`). Adopt the workflow in this
+repo’s CI to keep this file in sync automatically — see
+https://github.com/hyperpolymath/standards/blob/main/templates/cliff.toml[`+templates/cliff.toml+`]
+for the canonical config.
+
+The format follows https://keepachangelog.com/en/1.1.0/[Keep a
+Changelog]; this project aims to follow
+https://semver.org/spec/v2.0.0.html[Semantic Versioning].
+
+=== [Unreleased]
+
+==== Added
+
+* feat(crg): add crg-grade and crg-badge justfile recipes
+* feat: add stapeln.toml container definition
+* feat: add UX Justfile with doctor, tour, help-me, assail recipes
+* feat: deploy UX Manifesto infrastructure
+
+==== Fixed
+
+* fix(ci): sync hypatia-scan.yml to canonical (#27)
+* fix(ci): adopt canonical hypatia-scan.yml (#26)
+
+==== Documentation
+
+* docs: record tech-debt audit findings (2026-05-26) (#31)
+* docs: add TOPOLOGY.md
+* docs: add TEST-NEEDS.md (CRG C)
+* docs: add TEST-NEEDS.md (CRG C)
+* docs: add EXPLAINME.adoc — prove-it file backing README claims
+
+=== Pre-history
+
+Prior commits to this file’s introduction are recorded in git history
+but not formally classified into Keep-a-Changelog sections. To backfill,
+run `+git cliff -o CHANGELOG.md+` locally using the canonical
+https://github.com/hyperpolymath/standards/blob/main/templates/cliff.toml[`+cliff.toml+`]
+— this is one-shot mechanical work.
+
+'''''

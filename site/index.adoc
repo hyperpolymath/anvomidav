@@ -1,0 +1,20 @@
+== Anvomidav
+
+The public web home for this project is
+https://anvomidav.org[anvomidav.org].
+
+The first programming language for choreographers of figure skating.
+
+Anvomidav aims to provide figure skating choreographers with a
+domain-specific language (DSL) to:
+
+=== Project Links
+
+* Website: https://anvomidav.org[anvomidav.org]
+* Source: https://github.com/hyperpolymath/anvomidav
+* README:
+https://github.com/hyperpolymath/anvomidav/blob/main/README.adoc[project
+overview]
+
+This page is a lightweight landing point for the repository and will
+grow with the project.
