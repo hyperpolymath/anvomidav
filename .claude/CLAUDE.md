@@ -26,6 +26,7 @@
 | Banned | Replacement |
 |--------|-------------|
 | TypeScript | AffineScript |
+| ReScript | AffineScript |
 | Deno | Bun |
 | Node.js | Bun |
 | npm | Bun |
