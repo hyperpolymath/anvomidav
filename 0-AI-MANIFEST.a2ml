@@ -97,7 +97,7 @@ This repo follows the **Dual-Track** architecture:
 ├── README.adoc                 # High-level pitch — excitement and awe (Rich Human)
 ├── EXPLAINME.adoc              # Developer deep-dive — how it works (Rich Nerd)
 ├── ROADMAP.adoc                # Future direction
-├── CONTRIBUTING.adoc           # Human contribution guide
+├── .github/CONTRIBUTING.md           # Human contribution guide
 ├── GOVERNANCE.adoc             # Decision-making model
 ├── Justfile                    # Task runner
 ├── Containerfile               # OCI build
