@@ -138,4 +138,4 @@ This roadmap is a living document. To propose changes:
 2. Submit a PR for specific task additions
 3. Use issues to claim tasks you want to work on
 
-See link:CONTRIBUTING.md[CONTRIBUTING.md] for workflow details.
+See link:.github/CONTRIBUTING.md[CONTRIBUTING.md] for workflow details.

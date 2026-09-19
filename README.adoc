@@ -60,7 +60,7 @@ guix shell         # Guix users
 == Documentation
 
 * link:ROADMAP.adoc[Roadmap] — Development phases and milestones
-* link:CONTRIBUTING.md[Contributing] — How to participate
+* link:.github/CONTRIBUTING.md[Contributing] — How to participate
 * link:SECURITY.md[Security Policy] — Vulnerability reporting
 * link:CODE_OF_CONDUCT.md[Code of Conduct] — Community standards
 
