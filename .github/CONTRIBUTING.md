@@ -9,7 +9,7 @@ SPDX-FileCopyrightText: 2026 Jonathan D.A. Jewell (hyperpolymath) <6759885+hyper
 ## Audience
 
 Developers working **on** `anvomidav`. For consumers (people calling or
-depending on it) see <a href="./usage.adoc" class="adoc">usage</a>.
+depending on it) see <a href="../docs/usage.adoc" class="adoc">usage</a>.
 
 ## Local-dev setup
 
