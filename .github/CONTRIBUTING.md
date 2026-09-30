@@ -19,7 +19,7 @@ Prerequisites — the minimum versions and where to get them:
 
 - `<tool` `2>` v\`\<version\>\` — `<install` `instruction>`.
 
-- GPG signing key configured (estate policy — all commits must be
+- SSH signing key configured (estate policy — all commits must be
   signed). See
   [standards/docs/secure-coding-training.md](https://github.com/hyperpolymath/standards/blob/main/docs/secure-coding-training.md).
 
@@ -55,7 +55,7 @@ just fmt         # auto-format
 just lint        # static checks
 ```
 
-- All commits must be **GPG-signed** (CI enforces; see
+- All commits must be **signed**, with SSH for people (CI enforces; see
   [standards](https://github.com/hyperpolymath/standards)).
 
 - All source files must carry an **SPDX-License-Identifier** header (CI
